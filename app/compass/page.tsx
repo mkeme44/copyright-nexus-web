@@ -89,7 +89,7 @@ function parseConfidence(answer: string): "High" | "Medium" | "Low" | null {
 }
 
 const EXAMPLES = [
-  "Is "The Old Man and the Sea" by Hemingway still in copyright?",
+  "Is 'The Old Man and the Sea' by Hemingway still in copyright?",
   "Can I freely use a book published in 1925?",
   "What about a magazine from 1955 with a copyright notice?",
   "Unpublished letters from someone who died in 1948?",
