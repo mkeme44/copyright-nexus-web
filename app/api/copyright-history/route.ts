@@ -69,7 +69,7 @@ async function rpcWithRetry(
   let lastErr: unknown;
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     try {
-      const { data, error } = await supabase.rpc(fn, params);
+      const { data, error } = await supabase.rpc(fn, params as undefined);
       if (error) throw error;
       return (data as unknown[]) ?? [];
     } catch (err) {
