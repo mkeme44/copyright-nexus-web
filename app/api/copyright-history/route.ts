@@ -17,9 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { assembleCopyrightHistory } from "@/lib/copyright-history-engine";
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Supabase client (server-side only, service role key never exposed to client)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Supabase client (server-side only, service role key never exposed to client)
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
@@ -30,9 +28,7 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Simple in-memory rate limiter (30 req/min per IP)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Simple in-memory rate limiter (30 req/min per IP)
 
 const RATE_LIMIT = 30;
 const WINDOW_MS = 60_000;
@@ -50,9 +46,7 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  RPC helpers with retry
-// ─────────────────────────────────────────────────────────────────────────────
+// ── RPC helpers with retry
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1500;
@@ -69,7 +63,8 @@ async function rpcWithRetry(
   let lastErr: unknown;
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     try {
-      const { data, error } = await supabase.rpc(fn, params as undefined);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc(fn, params);
       if (error) throw error;
       return (data as unknown[]) ?? [];
     } catch (err) {
@@ -81,9 +76,7 @@ async function rpcWithRetry(
   return [];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  POST handler
-// ─────────────────────────────────────────────────────────────────────────────
+// ── POST handler
 
 export async function POST(req: NextRequest) {
   // Rate limit
