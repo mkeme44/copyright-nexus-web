@@ -1,335 +1,270 @@
-import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
-import Link from "next/link";
+'use client'
 
-const baskerville = Libre_Baskerville({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  style: ["normal", "italic"],
-  variable: "--font-baskerville",
-});
-
-const sourceSans = Source_Sans_3({
-  subsets: ["latin"],
-  weight: ["300", "400", "600"],
-  variable: "--font-source-sans",
-});
-
-type ToolStatus = "live" | "beta" | "alpha";
-
-interface Tool {
-  icon: string;
-  name: string;
-  status: ToolStatus;
-  description: string;
-  note?: string;
-  href: string | null;
-  linkLabel: string;
-  internal?: boolean;
-}
-
-const tools: Tool[] = [
-  {
-    icon: "🧭",
-    name: "Copyright Compass",
-    status: "live",
-    description:
-      "Ask any copyright question in plain language. Searches 1.8 million verified renewal records and the copyright knowledge base to return a rights determination with confidence level and RightsStatements.org URI.",
-    href: "/compass",
-    linkLabel: "Launch Compass",
-    internal: true,
-  },
-  {
-    icon: "🗺️",
-    name: "Copyright Navigator",
-    status: "beta",
-    description:
-      "Step-by-step guided analysis. Answer structured questions about publication date, notice, and renewal to walk the correct legal path to a determination — no prior copyright knowledge needed.",
-    note: "Beta: core decision logic is complete; interface refinements ongoing.",
-    href: "https://forms.gle/W7Xio92dLx5h7FHR9",
-    linkLabel: "Launch Navigator",
-  },
-  {
-    icon: "📜",
-    name: "Copyright History",
-    status: "beta",
-    description:
-      "Search by title and author to retrieve the full copyright lifecycle of a specific work — original registration, renewal records, current status, and expiration date from verified databases.",
-    note: "Beta: lookup accuracy is strong; deploying to the web shortly.",
-    href: null,
-    linkLabel: "Deploying soon",
-  },
-  {
-    icon: "🔬",
-    name: "Rights Scan",
-    status: "alpha",
-    description:
-      "Batch rights review for digital collections. Upload a list of works and receive a rights assessment for each, ready to export into your digital asset management workflow.",
-    note: "Alpha: under active development. Early testers welcome — expect rough edges.",
-    href: null,
-    linkLabel: "Coming soon",
-  },
-];
-
-const sources = [
-  { name: "Stanford Renewals", detail: "246k book renewals, 1923–1963 publications" },
-  { name: "NYPL CCE Renewals", detail: "591k records, all classes, 1950–1991 renewals" },
-  { name: "USCO Copyright Office", detail: "908k RE-prefix renewal registrations" },
-  { name: "HathiTrust CRMS", detail: "67k human-reviewed determinations" },
-];
-
-const statusConfig: Record<ToolStatus, { label: string; bg: string; color: string }> = {
-  live:  { label: "Live",  bg: "#e1f0ea", color: "#1a5c38" },
-  beta:  { label: "Beta",  bg: "#e8eaf8", color: "#2e3480" },
-  alpha: { label: "Alpha", bg: "#faeeda", color: "#6b3a00" },
-};
-
-const s = {
-  wrap: {
-    fontFamily: "var(--font-source-sans), sans-serif",
-    fontWeight: 300,
-    color: "#1a1a1a",
-    background: "#f9f8f6",
-    minHeight: "100vh",
-  } as React.CSSProperties,
-  nav: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "1rem 2rem",
-    borderBottom: "0.5px solid #e0ddd8",
-    background: "#ffffff",
-  } as React.CSSProperties,
-  logo: {
-    fontFamily: "var(--font-baskerville), serif",
-    fontWeight: 700,
-    fontSize: "15px",
-    color: "#1e3a5f",
-    textDecoration: "none",
-  } as React.CSSProperties,
-};
+import Link from 'next/link'
+import Nav from './components/Nav'
+import CompassPreview from './components/CompassPreview'
 
 export default function Home() {
   return (
-    <div className={`${baskerville.variable} ${sourceSans.variable}`} style={s.wrap}>
+    <main>
+      <Nav />
 
-      {/* ── Nav ── */}
-      <nav style={s.nav}>
-        <span style={s.logo}>
-          Copyright<span style={{ color: "#7480d4" }}>Nexus</span>
-        </span>
-        <div style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}>
-          {[["Tools", "#tools"], ["Data Sources", "#data-sources"], ["About", "#about"]].map(([label, href]) => (
-            <a key={label} href={href} style={{ fontSize: "13px", color: "#666", textDecoration: "none" }}>
-              {label}
-            </a>
-          ))}
+      {/* HERO */}
+      <section className="bg-white px-12 relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#e2e5f0 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.6 }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 70% 50%, rgba(116,128,212,0.06) 0%, transparent 65%)' }} />
+        <div className="max-w-[1100px] mx-auto grid grid-cols-2 gap-16 items-center py-24 relative z-10">
+          <div>
+            <h1 className="text-[50px] font-bold text-navy leading-[1.1] tracking-[-0.025em] mb-6" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+              Your starting point for{' '}
+              <em className="italic text-periwinkle">confident</em>{' '}
+              copyright research.
+            </h1>
+            <p className="text-[17px] font-light text-muted-text leading-[1.75] mb-9 max-w-[460px]">
+              Cultural heritage professionals make copyright determinations every day that impact what to digitize, how to share, and what collections are made accessible to the people they serve. Copyright Nexus offers you the research infrastructure to make those determinations accurately and confidently.
+            </p>
+            <div className="flex items-center gap-4">
+              <Link href="/services" className="bg-periwinkle text-white text-[14px] font-semibold px-6 py-3 rounded no-underline hover:bg-[#6570c4] transition-colors duration-150" style={{ boxShadow: '0 4px 14px rgba(116,128,212,0.4)' }}>
+                Copyright Services
+              </Link>
+              <Link href="/our-approach" className="text-navy text-[14px] font-semibold no-underline px-6 py-3 rounded transition-colors duration-150 hover:bg-gray-50" style={{ border: '1px solid #1e3a5f' }}>
+                Our Approach
+              </Link>
+            </div>
+          </div>
+          <div>
+            <CompassPreview size="sm" />
+          </div>
         </div>
-      </nav>
+      </section>
 
-      {/* ── Hero ── */}
-      <section style={{ background: "#1e3a5f", padding: "3.5rem 2rem 3rem" }}>
-        <div style={{ maxWidth: "700px", margin: "0 auto" }}>
-          <p style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "#7480d4", marginBottom: "0.9rem" }}>
-            Cultural Heritage Copyright Research
+      {/* PROBLEM */}
+      <section className="bg-off-white px-12 py-16">
+        <div className="max-w-[1100px] mx-auto">
+          <h2 className="text-[36px] font-bold text-navy leading-[1.2] tracking-[-0.02em] mb-7" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+            Good copyright research{' '}
+            <em className="italic text-periwinkle">opens</em>{' '}
+            collections.
+          </h2>
+          <p className="text-[16px] font-light text-[#4b5563] leading-[1.8] mb-5">
+            Every item in your collection has a copyright status, and knowing it accurately is what allows your institution to share content responsibly and expansively. For institutions without dedicated legal staff, getting to that determination thoroughly and efficiently is one of the most persistent challenges in collections work.
           </p>
-          <h1
-            style={{
-              fontFamily: "var(--font-baskerville), serif",
-              fontWeight: 700,
-              fontSize: "clamp(1.8rem, 4vw, 2.4rem)",
-              lineHeight: 1.18,
-              color: "#ffffff",
-              marginBottom: "1rem",
-              letterSpacing: "-0.02em",
-              maxWidth: "600px",
-            }}
-          >
-            Four tools for every copyright question your collection raises
-          </h1>
-          <p style={{ fontSize: "1rem", fontWeight: 300, color: "rgba(255,255,255,0.7)", lineHeight: 1.65, marginBottom: "2rem", maxWidth: "500px" }}>
-            Built for librarians, archivists, and museum curators — grounded in
-            1.8 million verified renewal records and US copyright law.
+          <p className="text-[16px] font-light text-[#4b5563] leading-[1.8] mb-5">
+            Good copyright research does not favor any outcome. It gives your institution{' '}
+            <strong className="text-navy font-semibold">a well researched answer</strong>,
+            one that supports responsible access, respects the rights of creators, and holds up to scrutiny regardless of where it lands.
           </p>
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <Link
-              href="/compass"
-              style={{
-                background: "#7480d4",
-                color: "#fff",
-                padding: "0.65rem 1.4rem",
-                fontFamily: "var(--font-source-sans), sans-serif",
-                fontSize: "13.5px",
-                fontWeight: 600,
-                borderRadius: "4px",
-                textDecoration: "none",
-                display: "inline-block",
-              }}
-            >
+          <p className="text-[16px] font-light text-[#4b5563] leading-[1.8]">
+            Copyright Nexus was built for institutions that want to do this right. It is not a substitute for legal counsel, but it is the rigorous, documented starting point that responsible copyright research deserves.
+          </p>
+        </div>
+      </section>
+
+      {/* COMPASS SHOWCASE */}
+      <section className="bg-white px-12 py-16">
+        <div className="max-w-[1100px] mx-auto grid grid-cols-2 gap-16 items-center">
+          <div>
+            <h2 className="text-[36px] font-bold text-navy leading-[1.2] mb-5" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+              Meet{' '}
+              <em className="italic text-periwinkle">Copyright Compass.</em>
+            </h2>
+            <p className="text-[15px] font-light text-[#4b5563] leading-[1.8] mb-4">
+              Compass is our flagship AI-powered research service. Ask any copyright question you have about a published title, a publication era, an unpublished manuscript, archival correspondence, or a government document, and Compass will search across verified copyright and biographical databases to provide trusted guidance on the copyright status of your collections.
+            </p>
+            <p className="text-[15px] font-light text-[#4b5563] leading-[1.8] mb-4">
+              With each determination, Compass returns a confidence level with a specific explanation of how the rights status was reached, alongside a recommended RightsStatements.org designation for the work.
+            </p>
+            <p className="text-[15px] font-light text-[#4b5563] leading-[1.8] mb-7">
+              Compass does not offer any legal opinions. Instead, it is the most thorough, documented starting point available in your copyright journey.
+            </p>
+            <Link href="/compass" className="inline-block bg-periwinkle text-white text-[14px] font-semibold px-6 py-3 rounded no-underline hover:bg-[#6570c4] transition-colors duration-150" style={{ boxShadow: '0 4px 14px rgba(116,128,212,0.4)' }}>
               Open Copyright Compass
             </Link>
-            <a
-              href="#tools"
-              style={{
-                background: "transparent",
-                color: "rgba(255,255,255,0.8)",
-                border: "0.5px solid rgba(255,255,255,0.3)",
-                padding: "0.65rem 1.4rem",
-                fontFamily: "var(--font-source-sans), sans-serif",
-                fontSize: "13.5px",
-                fontWeight: 400,
-                borderRadius: "4px",
-                textDecoration: "none",
-                display: "inline-block",
-              }}
-            >
-              View all tools
-            </a>
+          </div>
+          <div>
+            <CompassPreview size="lg" />
           </div>
         </div>
       </section>
 
-      {/* ── Tools ── */}
-      <section id="tools" style={{ padding: "3rem 2rem", maxWidth: "900px", margin: "0 auto" }}>
-        <p style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "#7480d4", marginBottom: "0.35rem" }}>
-          The Suite
-        </p>
-        <h2 style={{ fontFamily: "var(--font-baskerville), serif", fontSize: "1.4rem", fontWeight: 700, color: "#1a1a1a", marginBottom: "1.75rem" }}>
-          Tools at every stage of your workflow
-        </h2>
+      {/* SUITE */}
+      <section className="bg-off-white px-12 py-16">
+        <div className="max-w-[1100px] mx-auto">
+          <div className="mb-12">
+            <h2 className="text-[36px] font-bold text-navy leading-[1.2] mb-4" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+              Built on the same{' '}
+              <em className="italic text-periwinkle">foundation.</em>{' '}
+              Designed for specific{' '}
+              <em className="italic text-periwinkle">workflows.</em>
+            </h2>
+            <p className="text-[16px] font-light text-muted-text leading-[1.7]">
+              Every service in the Copyright Nexus suite draws on the same verified research infrastructure.
+            </p>
+          </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "1px",
-            background: "#e0ddd8",
-            border: "0.5px solid #e0ddd8",
-            borderRadius: "8px",
-            overflow: "hidden",
-          }}
-        >
-          {tools.map((tool) => {
-            const sc = statusConfig[tool.status];
-            const isLinked = !!tool.href;
-            const linkEl = isLinked ? (
-              tool.internal ? (
-                <Link href={tool.href!} style={{ fontSize: "12.5px", fontWeight: 600, color: "#7480d4", textDecoration: "none", marginTop: "auto", paddingTop: "0.6rem", display: "block" }}>
-                  {tool.linkLabel} →
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-8" style={{ borderTop: '4px solid #7480d4', borderLeft: '4px solid #7480d4', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', borderRadius: '12px' }}>
+                <h3 className="text-[19px] font-bold text-navy mb-1" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+                  Copyright Compass
+                </h3>
+                <span className="block text-[11px] font-semibold tracking-[0.08em] uppercase text-periwinkle mb-3">
+                  AI-powered research
+                </span>
+                <p className="text-[14px] font-light text-muted-text leading-[1.7] mb-5">
+                  Share information about a work and receive rights guidance powered by trusted copyright and biographical databases.
+                </p>
+                <Link href="/compass" className="inline-block text-[13px] font-semibold text-white bg-periwinkle px-4 py-2 rounded no-underline hover:bg-[#6570c4] transition-colors duration-150">
+                  Open Compass
                 </Link>
-              ) : (
-                <a href={tool.href!} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12.5px", fontWeight: 600, color: "#7480d4", textDecoration: "none", marginTop: "auto", paddingTop: "0.6rem", display: "block" }}>
-                  {tool.linkLabel} →
+              </div>
+              <div className="bg-white p-8" style={{ borderTop: '4px solid #7480d4', borderLeft: '4px solid #7480d4', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', borderRadius: '12px' }}>
+                <h3 className="text-[19px] font-bold text-navy mb-1" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+                  Copyright Navigator
+                </h3>
+                <span className="block text-[11px] font-semibold tracking-[0.08em] uppercase text-periwinkle mb-3">
+                  Step-by-step guided analysis
+                </span>
+                <p className="text-[14px] font-light text-muted-text leading-[1.7] mb-5">
+                  Answer straightforward questions about publication date, copyright notice, and renewals for your items to arrive at a clear rights determination. No prior copyright expertise required.
+                </p>
+                <a href="https://forms.gle/W7Xio92dLx5h7FHR9" target="_blank" rel="noopener noreferrer" className="inline-block text-[13px] font-semibold text-white bg-periwinkle px-4 py-2 rounded no-underline hover:bg-[#6570c4] transition-colors duration-150">
+                  Open Navigator
                 </a>
-              )
-            ) : (
-              <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#bbb", marginTop: "auto", paddingTop: "0.6rem", display: "block" }}>
-                {tool.linkLabel}
-              </span>
-            );
-
-            return (
-              <div key={tool.name} style={{ background: "#ffffff", padding: "1.4rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-                  <span style={{ fontSize: "18px" }}>{tool.icon}</span>
-                  <span style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", padding: "2px 7px", borderRadius: "3px", background: sc.bg, color: sc.color }}>
-                    {sc.label}
-                  </span>
-                </div>
-                <p style={{ fontFamily: "var(--font-baskerville), serif", fontSize: "1rem", fontWeight: 700, color: "#1a1a1a" }}>
-                  {tool.name}
-                </p>
-                <p style={{ fontSize: "13px", fontWeight: 300, color: "#555", lineHeight: 1.6 }}>
-                  {tool.description}
-                </p>
-                {tool.note && (
-                  <p style={{ fontSize: "11.5px", color: "#888", lineHeight: 1.5, fontStyle: "italic", borderTop: "0.5px solid #e0ddd8", paddingTop: "0.65rem", marginTop: "0.25rem" }}>
-                    {tool.note}
-                  </p>
-                )}
-                {linkEl}
               </div>
-            );
-          })}
-        </div>
-
-        {/* Version explainer */}
-        <div style={{ border: "0.5px solid #e0ddd8", borderLeft: "3px solid #7480d4", borderRadius: "0 6px 6px 0", padding: "0.9rem 1.1rem", marginTop: "1.25rem", background: "#f9f8f6" }}>
-          <p style={{ fontSize: "12px", color: "#666", lineHeight: 1.6 }}>
-            <strong style={{ color: "#1a1a1a", fontWeight: 600 }}>Live</strong> — production-ready.{" "}
-            <strong style={{ color: "#1a1a1a", fontWeight: 600 }}>Beta</strong> — fully functional, being refined; feedback welcome.{" "}
-            <strong style={{ color: "#1a1a1a", fontWeight: 600 }}>Alpha</strong> — under active development; features may change.
-          </p>
-        </div>
-
-        {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1px", background: "#e0ddd8", border: "0.5px solid #e0ddd8", borderRadius: "8px", overflow: "hidden", marginTop: "2rem" }}>
-          {[{ num: "1.8M+", label: "Renewal records indexed" }, { num: "4", label: "Verified data sources" }, { num: "1923–", label: "Publication years covered" }].map((s) => (
-            <div key={s.label} style={{ background: "#ffffff", padding: "1.1rem 1.4rem" }}>
-              <div style={{ fontFamily: "var(--font-baskerville), serif", fontSize: "1.5rem", fontWeight: 700, color: "#1e3a5f" }}>{s.num}</div>
-              <div style={{ fontSize: "11.5px", color: "#888", marginTop: "3px" }}>{s.label}</div>
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* ── Data Sources ── */}
-      <section id="data-sources" style={{ padding: "0 2rem 3rem", maxWidth: "900px", margin: "0 auto" }}>
-        <p style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "#7480d4", marginBottom: "0.35rem" }}>
-          Data Sources
-        </p>
-        <h2 style={{ fontFamily: "var(--font-baskerville), serif", fontSize: "1.4rem", fontWeight: 700, color: "#1a1a1a", marginBottom: "1.25rem" }}>
-          Built on verified records
-        </h2>
-        <div style={{ background: "#f2f0ec", borderRadius: "8px", padding: "1.75rem" }}>
-          <p style={{ fontFamily: "var(--font-baskerville), serif", fontSize: "0.95rem", fontWeight: 700, color: "#1a1a1a", marginBottom: "1.1rem" }}>
-            Renewal databases searched on every query
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "1rem" }}>
-            {sources.map((src) => (
-              <div key={src.name}>
-                <div style={{ fontSize: "12.5px", fontWeight: 600, color: "#1a1a1a" }}>{src.name}</div>
-                <div style={{ fontSize: "11.5px", color: "#666", marginTop: "3px" }}>{src.detail}</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-8" style={{ borderTop: '4px solid #7480d4', borderLeft: '4px solid #7480d4', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', borderRadius: '12px' }}>
+                <h3 className="text-[19px] font-bold text-navy mb-1" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+                  Copyright History
+                </h3>
+                <span className="block text-[11px] font-semibold tracking-[0.08em] uppercase text-periwinkle mb-3">
+                  Published work renewal timeline
+                </span>
+                <p className="text-[14px] font-light text-muted-text leading-[1.7] mb-5">
+                  Search by title and author to retrieve the full copyright lifecycle of a specific work, including original registration, renewal records, current status, and projected expiration date.
+                </p>
+                <span className="inline-block text-[13px] font-semibold text-gray-400 bg-gray-100 px-4 py-2 rounded">
+                  Coming Soon
+                </span>
               </div>
-            ))}
+              <div className="bg-white p-8" style={{ borderTop: '4px solid #7480d4', borderLeft: '4px solid #7480d4', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', borderRadius: '12px' }}>
+                <h3 className="text-[19px] font-bold text-navy mb-1" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+                  Rights Scan
+                </h3>
+                <span className="block text-[11px] font-semibold tracking-[0.08em] uppercase text-periwinkle mb-3">
+                  Rights review for digital collections
+                </span>
+                <p className="text-[14px] font-light text-muted-text leading-[1.7] mb-5">
+                  Provide a link or upload a list of items and receive a rights assessment for each, ready to integrate into your digital asset management workflow.
+                </p>
+                <span className="inline-block text-[13px] font-semibold text-gray-400 bg-gray-100 px-4 py-2 rounded">
+                  Coming Soon
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── About ── */}
-      <section id="about" style={{ padding: "0 2rem 3rem", maxWidth: "900px", margin: "0 auto" }}>
-        <p style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "#7480d4", marginBottom: "0.35rem" }}>
-          About
-        </p>
-        <h2 style={{ fontFamily: "var(--font-baskerville), serif", fontSize: "1.4rem", fontWeight: 700, color: "#1a1a1a", marginBottom: "1rem" }}>
-          Why Copyright Nexus exists
-        </h2>
-        <p style={{ fontSize: "14px", color: "#555", lineHeight: 1.7, maxWidth: "600px" }}>
-          Copyright Nexus is a suite of tools developed to support museums, archives, and libraries
-          in navigating the complex landscape of copyright clearance. Our mission is to provide
-          accessible, practical resources that empower cultural institutions to make informed
-          decisions about the use and sharing of their collections.
-        </p>
-        <p style={{ fontSize: "14px", color: "#555", lineHeight: 1.7, maxWidth: "600px", marginTop: "0.85rem" }}>
-          The tools are built on publicly available renewal records from the Stanford Copyright
-          Renewal Database, the NYPL Catalog of Copyright Entries, the U.S. Copyright Office,
-          and HathiTrust CRMS — cross-referenced to give the most complete picture possible.
-        </p>
+      {/* TRUST */}
+      <section className="bg-white px-12 py-16">
+        <div className="max-w-[1100px] mx-auto">
+          <h2 className="text-[36px] font-bold text-navy leading-[1.2] mb-6" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
+            Built using{' '}
+            <em className="italic text-periwinkle">verified</em>{' '}
+            sources.{' '}
+            <em className="italic text-periwinkle">Transparent</em>{' '}
+            about our process.
+          </h2>
+          <p className="text-[16px] font-light text-muted-text leading-[1.75] mb-4">
+            Copyright Nexus draws on authoritative databases and reference materials to answer every question. Copyright Nexus is transparent about the confidence level of each determination because accuracy requires honesty about uncertainty. When data about an item is found, we will tell you where to find it. If no data is found, we tell you what that means and recommend next steps.
+          </p>
+          <p className="text-[15px] font-light text-muted-text mb-8">
+            Want to understand the methodology behind every determination?{' '}
+            <Link href="/our-approach" className="font-semibold text-periwinkle no-underline border-b pb-px" style={{ borderColor: 'rgba(116,128,212,0.35)' }}>
+              Learn more about Our Approach
+            </Link>
+          </p>
+
+          <div style={{ borderTop: '4px solid #7480d4', borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
+            <div className="flex items-center justify-between bg-white px-8 py-5" style={{ borderBottom: '1px solid #e5e7eb' }}>
+              <div>
+                <div className="text-[15px] font-semibold text-navy">Stanford Copyright Renewal Database</div>
+                <div className="text-[13px] font-light text-muted-text mt-1">Book renewal records for publications from 1923 to 1963</div>
+              </div>
+              <a href="https://exhibits.stanford.edu/copyrightrenewals" target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', fontWeight: 600, color: '#7480d4', textDecoration: 'none', flexShrink: 0, marginLeft: '32px' }}>View source</a>
+            </div>
+            <div className="flex items-center justify-between bg-white px-8 py-5" style={{ borderBottom: '1px solid #e5e7eb' }}>
+              <div>
+                <div className="text-[15px] font-semibold text-navy">NYPL Catalog of Copyright Entries</div>
+                <div className="text-[13px] font-light text-muted-text mt-1">Records spanning 1950 to 1991</div>
+              </div>
+              <a href="https://cce-search.nypl.org/" target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', fontWeight: 600, color: '#7480d4', textDecoration: 'none', flexShrink: 0, marginLeft: '32px' }}>View source</a>
+            </div>
+            <div className="flex items-center justify-between bg-white px-8 py-5" style={{ borderBottom: '1px solid #e5e7eb' }}>
+              <div>
+                <div className="text-[15px] font-semibold text-navy">U.S. Copyright Office Records</div>
+                <div className="text-[13px] font-light text-muted-text mt-1">Renewal registrations</div>
+              </div>
+              <a href="https://publicrecords.copyright.gov/" target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', fontWeight: 600, color: '#7480d4', textDecoration: 'none', flexShrink: 0, marginLeft: '32px' }}>View source</a>
+            </div>
+            <div className="flex items-center justify-between bg-white px-8 py-5" style={{ borderBottom: '1px solid #e5e7eb' }}>
+              <div>
+                <div className="text-[15px] font-semibold text-navy">HathiTrust Copyright Review Management System</div>
+                <div className="text-[13px] font-light text-muted-text mt-1">Human-reviewed public domain determinations</div>
+              </div>
+              <a href="https://www.hathitrust.org/member-libraries/services-programs/copyright-review/" target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', fontWeight: 600, color: '#7480d4', textDecoration: 'none', flexShrink: 0, marginLeft: '32px' }}>View source</a>
+            </div>
+            <div className="flex items-center justify-between bg-white px-8 py-5">
+              <div>
+                <div className="text-[15px] font-semibold text-navy">Wikidata</div>
+                <div className="text-[13px] font-light text-muted-text mt-1">Open knowledge base for author biographical records and death dates</div>
+              </div>
+              <a href="https://www.wikidata.org/" target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', fontWeight: 600, color: '#7480d4', textDecoration: 'none', flexShrink: 0, marginLeft: '32px' }}>View source</a>
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer style={{ background: "#1e3a5f", padding: "2rem", marginTop: "auto" }}>
-        <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
-          <span style={{ fontFamily: "var(--font-baskerville), serif", fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.9)" }}>
-            Copyright<span style={{ color: "#7480d4" }}>Nexus</span>
-          </span>
-          <span style={{ fontSize: "11.5px", color: "rgba(255,255,255,0.4)" }}>Built for libraries, archives, and museums</span>
-        </div>
-        <div style={{ maxWidth: "900px", margin: "1.25rem auto 0", borderTop: "0.5px solid rgba(255,255,255,0.1)", paddingTop: "1rem", fontSize: "11px", color: "rgba(255,255,255,0.3)", lineHeight: 1.6 }}>
-          This suite provides research assistance only and does not constitute legal advice.
-          For high-stakes decisions, consult a copyright attorney or contact the U.S. Copyright Office directly.
-          © {new Date().getFullYear()} Copyright Nexus.
+      {/* FOOTER */}
+      <footer style={{ background: '#0d1f35' }} className="px-12 py-8">
+        <div className="max-w-[1100px] mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2 text-[17px] font-bold" style={{ fontFamily: 'Libre Baskerville, Georgia, serif', color: '#f0ede8' }}>
+              <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
+                <path d="M11 2L12.8 9.2L20 11L12.8 12.8L11 20L9.2 12.8L2 11L9.2 9.2Z" stroke="#7480d4" strokeWidth="1.3" fill="rgba(116,128,212,0.12)" />
+              </svg>
+              Copyright Nexus
+            </div>
+            <div className="flex items-center gap-6">
+              <Link href="/compass" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>Compass</Link>
+              <span style={{ color: 'rgba(240,237,232,0.2)' }}>·</span>
+              <Link href="/navigator" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>Navigator</Link>
+              <span style={{ color: 'rgba(240,237,232,0.2)' }}>·</span>
+              <Link href="/our-approach" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>Our Approach</Link>
+              <span style={{ color: 'rgba(240,237,232,0.2)' }}>·</span>
+              <Link href="/about" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>About</Link>
+              <span style={{ color: 'rgba(240,237,232,0.2)' }}>·</span>
+              <a href="https://github.com/mkeme44" target="_blank" rel="noopener noreferrer" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>GitHub</a>
+              <span style={{ color: 'rgba(240,237,232,0.2)' }}>·</span>
+              <Link href="/contact" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>Contact</Link>
+            </div>
+          </div>
+          <div className="pt-5 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <p className="text-[12px] font-light" style={{ color: 'rgba(240,237,232,0.45)' }}>
+              Copyright Nexus provides research assistance only and does not constitute legal advice. For high-stakes determinations, consult a copyright attorney or the U.S. Copyright Office directly.
+            </p>
+            <p className="text-[12px] font-light" style={{ color: 'rgba(240,237,232,0.45)' }}>
+              Except where otherwise noted, content on this site is licensed under a Creative Commons Attribution 4.0 International license.
+            </p>
+            <p className="text-[12px] font-light" style={{ color: 'rgba(240,237,232,0.45)' }}>
+              &copy; 2026 Copyright Nexus
+            </p>
+          </div>
         </div>
       </footer>
-    </div>
-  );
+    </main>
+  )
 }
