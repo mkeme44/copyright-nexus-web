@@ -29,7 +29,8 @@ body {
   color: #1a1a1a;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}.card-border {
+}
+.card-border {
   outline: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
