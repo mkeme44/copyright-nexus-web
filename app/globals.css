@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@source "../app/**/*.{js,ts,jsx,tsx}";
+@source "../components/**/*.{js,ts,jsx,tsx}";
+
+@theme {
+  --color-navy: #1e3a5f;
+  --color-periwinkle: #7480d4;
+  --color-periwinkle-light: #eef0fb;
+  --color-periwinkle-muted: #9ba6e0;
+  --color-off-white: #f8f7f5;
+  --color-body-text: #3a3a3a;
+  --color-muted-text: #6b7280;
+  --font-sans: 'Source Sans 3', -apple-system, sans-serif;
+  --font-serif: 'Libre Baskerville', Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #ffffff;
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}.card-border {
+  outline: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.card-row-divider {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.card-col-divider {
+  border-right: 1px solid #e5e7eb;
+}
