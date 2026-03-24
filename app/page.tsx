@@ -128,7 +128,7 @@ export default function Home() {
                 <p className="text-[14px] font-light text-muted-text leading-[1.7] mb-5">
                   Answer straightforward questions about publication date, copyright notice, and renewals for your items to arrive at a clear rights determination. No prior copyright expertise required.
                 </p>
-                <a href="https://forms.gle/W7Xio92dLx5h7FHR9" target="_blank" rel="noopener noreferrer" className="inline-block text-[13px] font-semibold text-white bg-periwinkle px-4 py-2 rounded no-underline hover:bg-[#6570c4] transition-colors duration-150">
+                <a href="/navigator" target="_blank" rel="noopener noreferrer" className="inline-block text-[13px] font-semibold text-white bg-periwinkle px-4 py-2 rounded no-underline hover:bg-[#6570c4] transition-colors duration-150">
                   Open Navigator
                 </a>
               </div>

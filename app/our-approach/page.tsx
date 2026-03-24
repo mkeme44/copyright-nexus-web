@@ -10,13 +10,14 @@ export default function OurApproach() {
       <section
         style={{
           backgroundColor: '#ffffff',
-          backgroundImage: 'radial-gradient(circle, #d1d5e8 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
           paddingTop: '6rem',
           paddingBottom: '4rem',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div className="max-w-[780px] mx-auto px-12">
+        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#e2e5f0 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.6 }} />
+        <div className="max-w-[56rem] mx-auto px-6 relative" style={{ zIndex: 1 }}>
           <div
             style={{
               display: 'inline-flex',
@@ -49,7 +50,7 @@ export default function OurApproach() {
 
       {/* OUR APPROACH */}
       <section className="bg-white px-12 py-8">
-        <div className="max-w-[780px] mx-auto">
+        <div className="max-w-[1100px] mx-auto">
           <h2
             className="text-[28px] font-bold text-navy leading-[1.2] mb-5"
             style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}
@@ -67,7 +68,7 @@ export default function OurApproach() {
 
       {/* METHODOLOGY */}
       <section className="bg-off-white px-12 py-8">
-        <div className="max-w-[780px] mx-auto">
+        <div className="max-w-[1100px] mx-auto">
           <h2
             className="text-[28px] font-bold text-navy leading-[1.2] mb-5"
             style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}
@@ -113,7 +114,7 @@ export default function OurApproach() {
 
       {/* CONFIDENCE LEVELS */}
       <section className="bg-white px-12 py-8">
-        <div className="max-w-[780px] mx-auto">
+        <div className="max-w-[1100px] mx-auto">
           <h2
             className="text-[28px] font-bold text-navy leading-[1.2] mb-5"
             style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}
@@ -159,7 +160,7 @@ export default function OurApproach() {
 
       {/* LIMITATIONS */}
       <section className="bg-off-white px-12 py-8">
-        <div className="max-w-[780px] mx-auto">
+        <div className="max-w-[1100px] mx-auto">
           <h2
             className="text-[28px] font-bold text-navy leading-[1.2] mb-5"
             style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}
@@ -174,7 +175,7 @@ export default function OurApproach() {
 
       {/* FURTHER READING */}
       <section className="bg-white px-12 py-8">
-        <div className="max-w-[780px] mx-auto">
+        <div className="max-w-[1100px] mx-auto">
           <h2
             className="text-[28px] font-bold text-navy leading-[1.2] mb-6"
             style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}

@@ -3,7 +3,6 @@
 
 import Nav from '../components/Nav';
 import CompassPreview from '../components/CompassPreview';
-import Footer from '../components/Footer';
 
 export const metadata = {
   title: 'Services — Copyright Nexus',
@@ -20,13 +19,13 @@ export default function ServicesPage() {
       <section
         style={{
           backgroundColor: '#ffffff',
-          backgroundImage:
-            'radial-gradient(circle, #d1d5e8 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
           paddingTop: '6rem',
           paddingBottom: '4rem',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
+        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#e2e5f0 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.6 }} />
         <div
           style={{
             maxWidth: '56rem',
@@ -34,6 +33,8 @@ export default function ServicesPage() {
             marginRight: 'auto',
             paddingLeft: '1.5rem',
             paddingRight: '1.5rem',
+            position: 'relative',
+            zIndex: 1,
           }}
         >
           <div
@@ -295,11 +296,8 @@ export default function ServicesPage() {
               <ServiceFeature text="Produces a recommended rights statement at each endpoint" />
 
               <div style={{ marginTop: '1.75rem' }}>
-                {/* Replace with your actual Google Form URL */}
                 <a
-                  href="https://docs.google.com/forms/d/YOUR_FORM_ID/viewform"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/navigator"
                   style={{
                     display: 'inline-block',
                     backgroundColor: '#7480d4',
@@ -395,7 +393,6 @@ export default function ServicesPage() {
         </div>
       </section>
 
-      <Footer />
     </main>
   );
 }

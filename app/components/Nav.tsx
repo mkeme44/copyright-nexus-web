@@ -22,15 +22,22 @@ export default function Nav() {
         <div className="flex items-center gap-8">
 
           <div className="relative">
-            <button
-              className="text-[16px] text-muted-text hover:text-navy transition-colors duration-150 flex items-center gap-1 bg-transparent border-none cursor-pointer p-0"
-              onClick={() => setServicesOpen(!servicesOpen)}
-            >
-              Services
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginTop: '1px' }}>
-                <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/services"
+                className="text-[16px] text-muted-text hover:text-navy transition-colors duration-150 no-underline"
+              >
+                Services
+              </Link>
+              <button
+                className="text-muted-text hover:text-navy transition-colors duration-150 bg-transparent border-none cursor-pointer p-0 flex items-center"
+                onClick={() => setServicesOpen(!servicesOpen)}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginTop: '1px' }}>
+                  <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
             {servicesOpen && (
               <div
                 className="absolute top-[calc(100%+12px)] left-0 bg-white rounded-lg py-2 z-50"
