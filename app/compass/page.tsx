@@ -327,8 +327,6 @@ export default function CompassPage() {
     <div
       className={`${baskerville.variable} ${sourceSans.variable}`}
       style={{
-        fontFamily: "var(--font-source-sans), sans-serif",
-        fontWeight: 300,
         background: "#f8f7f5",
         minHeight: "100vh",
         display: "flex",
@@ -380,6 +378,8 @@ export default function CompassPage() {
           padding: "2rem 1.5rem",
           display: "flex",
           flexDirection: "column",
+          fontFamily: "var(--font-source-sans), sans-serif",
+          fontWeight: 300,
         }}
       >
         {history.length === 0 && !loading ? (
