@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Footer from './components/Footer'
+import FooterWrapper from './components/FooterWrapper'
 
 export const metadata: Metadata = {
   title: 'Copyright Nexus — Your starting point for confident copyright research',
@@ -21,7 +21,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         {children}
-        <Footer />
+        <FooterWrapper />
       </body>
     </html>
   )

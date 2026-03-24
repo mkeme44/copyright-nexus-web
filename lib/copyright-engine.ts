@@ -2,12 +2,12 @@
  * lib/copyright-engine.ts
  *
  * Server-side copyright determination logic.
- * Ported from query_compass.py — keeps the same data flow:
- *   1. Embed the question
+ * Data flow:
+ *   1. Embed the question (+ history context for follow-ups)
  *   2. Search Supabase knowledge chunks
- *   3. Extract work info (title/author/year) via LLM
- *   4. Lookup Stanford + NYPL renewal DBs if applicable
- *   5. Generate structured answer via GPT-4
+ *   3. Extract work info — title/author/year — with history awareness
+ *   4. Lookup Stanford + NYPL renewal DBs if a specific title is known
+ *   5. Generate structured answer OR ask a clarifying question via GPT-4
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -30,11 +30,17 @@ function getOpenAI() {
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+export interface ConversationTurn {
+  question: string;
+  answer: string;
+}
+
 export interface QueryResult {
   answer: string;
   chunks: ChunkResult[];
   renewal: RenewalResult;
   question: string;
+  needs_clarification?: boolean;
 }
 
 interface ChunkResult {
@@ -142,32 +148,51 @@ async function searchChunks(question: string): Promise<ChunkResult[]> {
 }
 
 // ── Work info extraction ───────────────────────────────────────────────────────
+// Passes conversation history so follow-up answers (e.g. "Life Magazine")
+// can be understood in context of the prior question.
 
-async function extractWorkInfo(question: string): Promise<WorkInfo> {
+async function extractWorkInfo(
+  question: string,
+  history: ConversationTurn[]
+): Promise<WorkInfo> {
   const openai = getOpenAI();
+
+  const historyText =
+    history.length > 0
+      ? history
+          .map((t) => `User: ${t.question}\nAssistant: ${t.answer}`)
+          .join("\n") + "\n\n"
+      : "";
 
   const response = await openai.chat.completions.create({
     model: "gpt-4-turbo-preview",
     temperature: 0,
-    max_tokens: 120,
+    max_tokens: 150,
     messages: [
       {
         role: "system",
-        content: `Extract bibliographic information from copyright questions.
-Respond with ONLY a JSON object, no other text, no markdown:
+        content: `Extract bibliographic information from a copyright question. Consider the full conversation history — the user may have provided a title or year in a previous message.
+
+Respond with ONLY a JSON object, no markdown:
 {
   "title": "exact title or null",
   "author": "author name or null",
   "year": 1952,
   "needs_renewal_check": true
 }
+
 Rules:
-- title: exact commonly-known title, or null if no specific work mentioned
+- title: specific work title extracted from question OR conversation history, or null
 - author: last name or full name, or null
-- year: publication year as integer, or null
-- needs_renewal_check: true if published work MIGHT be in 1923-1963 range`,
+- year: publication year as integer (from question or history), or null
+- needs_renewal_check: true if published work is or might be in the 1923-1963 range`,
       },
-      { role: "user", content: question },
+      {
+        role: "user",
+        content: historyText
+          ? `Conversation so far:\n${historyText}Current question: ${question}`
+          : question,
+      },
     ],
   });
 
@@ -263,11 +288,18 @@ async function lookupNYPL(
 
 // ── Combined renewal lookup ────────────────────────────────────────────────────
 
-async function lookupRenewal(question: string): Promise<RenewalResult> {
-  const info = await extractWorkInfo(question);
+async function lookupRenewal(
+  question: string,
+  history: ConversationTurn[]
+): Promise<{ renewal: RenewalResult; workInfo: WorkInfo }> {
+  const info = await extractWorkInfo(question, history);
 
-  if (!info.needs_renewal_check || !info.title) return { applicable: false };
-  if (info.year && !(info.year >= 1923 && info.year <= 1963)) return { applicable: false };
+  if (!info.needs_renewal_check || !info.title) {
+    return { renewal: { applicable: false }, workInfo: info };
+  }
+  if (info.year && !(info.year >= 1923 && info.year <= 1963)) {
+    return { renewal: { applicable: false }, workInfo: info };
+  }
 
   const [stanford, nypl] = await Promise.all([
     lookupStanford(info.title, info.author, info.year),
@@ -275,13 +307,16 @@ async function lookupRenewal(question: string): Promise<RenewalResult> {
   ]);
 
   return {
-    applicable: true,
-    found: !!(stanford || nypl),
-    title: info.title,
-    author: info.author,
-    year: info.year,
-    stanford,
-    nypl,
+    renewal: {
+      applicable: true,
+      found: !!(stanford || nypl),
+      title: info.title,
+      author: info.author,
+      year: info.year,
+      stanford,
+      nypl,
+    },
+    workInfo: info,
   };
 }
 
@@ -343,12 +378,7 @@ function formatRenewalContext(renewal: RenewalResult): string {
       "URI: https://rightsstatements.org/vocab/NoC-US/1.0/",
       "",
       "⚠  URAA CAVEAT: If this work was first published OUTSIDE the US,",
-      "   the URAA (1994) may have retroactively restored copyright.",
-      "",
-      "For manual verification:",
-      "  Stanford:  https://exhibits.stanford.edu/copyrightrenewals",
-      "  NYPL:      https://cce-search.nypl.org/",
-      "  USCO CPRS: https://publicrecords.copyright.gov/"
+      "   the URAA (1994) may have retroactively restored copyright."
     );
   }
 
@@ -361,50 +391,76 @@ function formatRenewalContext(renewal: RenewalResult): string {
 async function generateAnswer(
   question: string,
   chunks: ChunkResult[],
-  renewal: RenewalResult
+  renewal: RenewalResult,
+  history: ConversationTurn[]
 ): Promise<string> {
   const openai = getOpenAI();
   const renewalContext = formatRenewalContext(renewal);
-
-  if (!chunks.length && !renewalContext) {
-    return "I couldn't find relevant information for your question. Try specifying the publication date and whether the work is published or unpublished.";
-  }
 
   const contextParts = chunks.map(
     (c) => `[Knowledge Base — ${c.chunk_id}]\n${c.content}`
   );
   if (renewalContext) contextParts.push(renewalContext);
-
   const context = contextParts.join("\n\n---\n\n");
+
+  // Build message history for conversational context
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    {
+      role: "system",
+      content: `You are Copyright Compass, an expert AI assistant helping cultural heritage professionals determine copyright status of works in their collections. You have direct access to 1.8 million renewal records from the Stanford and NYPL CCE databases — those searches have already been run and the results are provided in your context.
+
+## HOW TO RESPOND
+
+**Case 1 — General rule question** (e.g., government works, post-1977 works, unpublished works by category):
+Answer the applicable rule directly from the provided context. No structured format required.
+
+**Case 2 — Specific work identified AND renewal data is in context:**
+Give a definitive determination using this exact markdown format:
+
+**COPYRIGHT STATUS:** Public Domain / In Copyright / Undetermined
+
+**RIGHTS STATEMENT:** [RightsStatements.org label]
+URI: [full URI]
+
+**CONFIDENCE:** High / Medium / Low
+
+**REASONING:** [cite renewal record number and database if applicable; concise legal basis]
+
+**ACTION ITEMS:** [genuine remaining steps only — omit this field entirely if status is clear]
+
+**Case 3 — Question involves 1923–1963 range but NO specific title is available:**
+Do NOT output "Undetermined" with a list of tasks for the user.
+Instead, explain briefly that the answer depends on whether copyright was renewed, and ask for the title so you can check the databases yourself. Keep it to 1–2 sentences. Example: "To check the renewal records for you, I'll need the title. What's the name of the magazine?"
+
+**Case 4 — Follow-up that provides a title or more detail:**
+Use the full conversation history to understand what work is being discussed, then provide a determination using the renewal data now in context.
+
+## RULES
+- NEVER tell users to "search the Stanford database" or "check the NYPL" — that is your job and you do it automatically.
+- When NO RENEWAL RECORD was found: state clearly the work is likely Public Domain (for US works). Include the URAA caveat for potentially foreign works.
+- When a RENEWAL WAS FOUND: state clearly the work is In Copyright and give the expiration year.
+- Be direct and concise. Cultural heritage professionals are experienced researchers who need clear determinations, not lengthy explanations of what they should go do.`,
+    },
+  ];
+
+  // Add conversation history for context
+  for (const turn of history) {
+    messages.push({ role: "user", content: turn.question });
+    messages.push({ role: "assistant", content: turn.answer });
+  }
+
+  // Add current question with context
+  messages.push({
+    role: "user",
+    content: context
+      ? `CONTEXT:\n${context}\n\n---\n\nQUESTION: ${question}`
+      : question,
+  });
 
   const response = await openai.chat.completions.create({
     model: "gpt-4-turbo-preview",
     temperature: 0.2,
-    messages: [
-      {
-        role: "system",
-        content: `You are Copyright Compass, an expert assistant helping cultural heritage professionals determine copyright status of materials in their collections.
-
-Answer based ONLY on the provided context. Always include:
-
-1. COPYRIGHT STATUS — Public Domain / In Copyright / Undetermined
-2. RIGHTS STATEMENT — Exact RightsStatements.org label and URI
-3. CONFIDENCE — High / Medium / Low with brief explanation
-4. REASONING — Concise legal basis
-5. ACTION ITEMS — Any remaining research steps needed
-
-When renewal lookup results appear in context:
-- RENEWAL CONFIRMED → In Copyright, state expiration year. Confidence: High.
-- NO RENEWAL FOUND (both DBs searched) → Public Domain (NoC-US). High confidence for US works. Flag URAA caveat for foreign works.
-- Always cite the specific renewal record number or database when a record was found.
-
-Be direct and practical.`,
-      },
-      {
-        role: "user",
-        content: `CONTEXT:\n${context}\n\n---\n\nQUESTION: ${question}`,
-      },
-    ],
+    messages,
   });
 
   return response.choices[0].message.content ?? "No answer generated.";
@@ -412,13 +468,36 @@ Be direct and practical.`,
 
 // ── Public entry point ─────────────────────────────────────────────────────────
 
-export async function runQuery(question: string): Promise<QueryResult> {
-  const [chunks, renewal] = await Promise.all([
-    searchChunks(question),
-    lookupRenewal(question),
+export async function runQuery(
+  question: string,
+  history: ConversationTurn[] = []
+): Promise<QueryResult> {
+  // Build the effective search question — for follow-ups, include prior context
+  // so the embedding search finds relevant chunks even for short follow-up messages
+  const searchQuestion =
+    history.length > 0
+      ? `${history.map((t) => t.question).join(" ")} ${question}`
+      : question;
+
+  const [chunks, { renewal, workInfo }] = await Promise.all([
+    searchChunks(searchQuestion),
+    lookupRenewal(question, history),
   ]);
 
-  const answer = await generateAnswer(question, chunks, renewal);
+  // Detect if we need clarification: question is in the renewal-required range
+  // but no title could be identified even with history context
+  const needsClarification =
+    workInfo.needs_renewal_check &&
+    !workInfo.title &&
+    !renewal.applicable;
 
-  return { question, answer, chunks, renewal };
+  const answer = await generateAnswer(question, chunks, renewal, history);
+
+  return {
+    question,
+    answer,
+    chunks,
+    renewal,
+    needs_clarification: needsClarification,
+  };
 }

@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { runQuery } from "@/lib/copyright-engine";
+import { runQuery, ConversationTurn } from "@/lib/copyright-engine";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
@@ -41,9 +41,13 @@ export async function POST(req: NextRequest) {
 
   // ── Parse request ────────────────────────────────────────────────────────────
   let question: string;
+  let history: ConversationTurn[] = [];
   try {
     const body = await req.json();
     question = (body.question ?? "").trim();
+    if (Array.isArray(body.history)) {
+      history = body.history.slice(-6); // last 6 turns max to keep prompt size reasonable
+    }
   } catch {
     return NextResponse.json(
       { error: "Invalid request body. Expected JSON with a 'question' field." },
@@ -67,7 +71,7 @@ export async function POST(req: NextRequest) {
 
   // ── Run the copyright engine ─────────────────────────────────────────────────
   try {
-    const result = await runQuery(question);
+    const result = await runQuery(question, history);
 
     return NextResponse.json(result, {
       headers: {
