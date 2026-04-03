@@ -113,19 +113,15 @@ export default function CompassPreview({ size = 'sm' }: CompassPreviewProps) {
               )}
             </div>
 
-            {/* Renewal badge */}
-            <div style={{ borderRadius: '8px', border: '1px solid #e2e5f0', overflow: 'hidden', marginBottom: '8px' }}>
-              <div style={{ backgroundColor: '#eef0fb', padding: '6px 12px', borderBottom: isLg ? 'none' : '1px solid #e2e5f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '10px', color: '#7480d4', fontWeight: 600 }}>Renewal Records</span>
-                {isLg ? (
-                  <span style={{ fontSize: '10px', fontWeight: 600, color: '#9ba6e0' }}>Not applicable</span>
-                ) : (
+            {/* Renewal badge — sm only */}
+            {!isLg && (
+              <div style={{ borderRadius: '8px', border: '1px solid #e2e5f0', overflow: 'hidden', marginBottom: '8px' }}>
+                <div style={{ backgroundColor: '#eef0fb', padding: '6px 12px', borderBottom: '1px solid #e2e5f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '10px', color: '#7480d4', fontWeight: 600 }}>Renewal Records</span>
                   <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '9999px', backgroundColor: 'rgba(60,180,100,0.12)', color: '#3a9e66', border: '1px solid rgba(60,180,100,0.28)' }}>
                     Renewed ✓
                   </span>
-                )}
-              </div>
-              {!isLg && (
+                </div>
                 <div style={{ padding: '8px 12px', backgroundColor: '#ffffff' }}>
                   <p style={{ fontSize: '10px', color: '#4b5563', fontWeight: 300, marginBottom: '6px', lineHeight: 1.5 }}>
                     Searched for: <strong style={{ fontWeight: 600, color: '#1e3a5f' }}>&ldquo;The Old Man and the Sea&rdquo;</strong> across Stanford Copyright Renewal Database + NYPL CCE
@@ -136,8 +132,8 @@ export default function CompassPreview({ size = 'sm' }: CompassPreviewProps) {
                     <div style={{ color: '#b94a3b', fontWeight: 600, marginTop: '2px' }}>Enters the Public Domain: January 1, 2048</div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Rights statement */}
             <div style={{
