@@ -496,32 +496,20 @@ function NavigatorMockup() {
             fontSize: '1rem',
             fontWeight: 700,
             color: '#1e3a5f',
-            marginBottom: '1.25rem',
+            marginBottom: '0.375rem',
             lineHeight: 1.4,
           }}
         >
-          Was this work published before January 1, 1930?
+          When was this work published?
+        </p>
+        <p style={{ fontSize: '0.78rem', color: '#6b7280', fontWeight: 300, lineHeight: 1.5, marginBottom: '1.25rem' }}>
+          Use the date of first publication, not creation or copyright registration.
         </p>
 
-        <MockChoice label="Yes — published before 1930" active={true} />
-        <MockChoice label="No — published 1930 or later" active={false} />
-        <MockChoice label="I am not sure" active={false} />
-
-        <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end' }}>
-          <span
-            style={{
-              backgroundColor: '#7480d4',
-              color: '#ffffff',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              padding: '0.5rem 1rem',
-              borderRadius: '0.375rem',
-              cursor: 'default',
-            }}
-          >
-            Continue
-          </span>
-        </div>
+        <MockChoice label="Before 1930" active={false} />
+        <MockChoice label="1930 – 1963" active={true} />
+        <MockChoice label="1964 – 1977" active={false} />
+        <MockChoice label="1978 or later" active={false} />
       </div>
     </div>
   );
