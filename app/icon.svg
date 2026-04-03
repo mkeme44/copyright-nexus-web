@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Outer 4-point star in periwinkle -->
+  <path d="M16,1 L19.8,12.2 L31,16 L19.8,19.8 L16,31 L12.2,19.8 L1,16 L12.2,12.2 Z"
+        fill="#7480d4"/>
+  <!-- Inner diamond accent in navy for depth -->
+  <path d="M16,8 L18.4,13.6 L24,16 L18.4,18.4 L16,24 L13.6,18.4 L8,16 L13.6,13.6 Z"
+        fill="#1e3a5f"/>
+</svg>

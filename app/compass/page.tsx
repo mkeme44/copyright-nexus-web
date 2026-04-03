@@ -61,6 +61,7 @@ interface QueryResult {
   renewal: RenewalResult;
   question: string;
   needs_clarification?: boolean;
+  status: "in-copyright" | "public-domain" | "undetermined" | null;
 }
 
 interface HistoryEntry {
@@ -71,18 +72,11 @@ interface HistoryEntry {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function parseStatus(answer: string): {
-  status: "public-domain" | "in-copyright" | "undetermined" | null;
-  label: string;
-} {
-  const lower = answer.toLowerCase();
-  if (lower.includes("public domain")) return { status: "public-domain", label: "Public Domain" };
-  if (lower.includes("in copyright") || lower.includes("copyright protected"))
-    return { status: "in-copyright", label: "In Copyright" };
-  if (lower.includes("undetermined") || lower.includes("copyright undetermined"))
-    return { status: "undetermined", label: "Undetermined" };
-  return { status: null, label: "" };
-}
+const STATUS_LABELS: Record<string, string> = {
+  "public-domain": "Public Domain",
+  "in-copyright": "In Copyright",
+  "undetermined": "Undetermined",
+};
 
 function parseConfidence(answer: string): "High" | "Medium" | "Low" | null {
   if (/confidence[:\s]+high/i.test(answer)) return "High";
@@ -141,22 +135,28 @@ function RenewalBadge({ renewal }: { renewal: RenewalResult }) {
       <div style={{ padding: "0.875rem 1.125rem" }}>
         <p style={{ fontSize: "0.85rem", color: "#4b5563", fontWeight: 300, marginBottom: "0.625rem", lineHeight: 1.6 }}>
           Searched for: <strong style={{ fontWeight: 600, color: "#1e3a5f" }}>&ldquo;{renewal.title}&rdquo;</strong>
-          {byline}{publine} across Stanford Renewal DB + NYPL CCE Renewals
+          {byline}{publine} across Stanford Copyright Renewal Database + New York Public Library Catalog of Copyright Entries
         </p>
         {renewal.stanford && (
           <div style={{ backgroundColor: "#f8f7f5", borderRadius: "0.5rem", padding: "0.625rem 0.875rem", marginBottom: "0.5rem", fontSize: "0.85rem", color: "#4b5563", fontWeight: 300 }}>
-            <div style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "0.25rem" }}>Stanford Renewal DB</div>
+            <div style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "0.25rem" }}>Stanford Copyright Renewal Database</div>
             <div>Matched: <em>{renewal.stanford.title}</em> · {Math.round(renewal.stanford.similarity * 100)}% match</div>
             {renewal.stanford.renewal_num && <div>Renewal: {renewal.stanford.renewal_num} ({renewal.stanford.renewal_date})</div>}
-            {renewal.stanford.expiration_year && <div style={{ color: "#b94a3b", fontWeight: 600, marginTop: "0.25rem" }}>Expires: January 1, {renewal.stanford.expiration_year + 1}</div>}
+            {renewal.stanford.expiration_year && <div style={{ color: "#b94a3b", fontWeight: 600, marginTop: "0.25rem" }}>Enters the Public Domain: January 1, {renewal.stanford.expiration_year + 1}</div>}
           </div>
         )}
         {renewal.nypl && (
           <div style={{ backgroundColor: "#f8f7f5", borderRadius: "0.5rem", padding: "0.625rem 0.875rem", fontSize: "0.85rem", color: "#4b5563", fontWeight: 300 }}>
-            <div style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "0.25rem" }}>NYPL CCE Renewals</div>
+            <div style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "0.25rem" }}>
+              <a href="https://archive.org/details/copyrightrecords" target="_blank" rel="noopener noreferrer" style={{ color: "#1e3a5f", textDecoration: "none" }}
+                onMouseEnter={(e) => (e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline"}
+                onMouseLeave={(e) => (e.currentTarget as HTMLAnchorElement).style.textDecoration = "none"}>
+                New York Public Library Catalog of Copyright Entries
+              </a>
+            </div>
             <div>Matched: <em>{renewal.nypl.title}</em> · {Math.round(renewal.nypl.similarity * 100)}% match</div>
             {renewal.nypl.renewal_id && <div>Renewal: {renewal.nypl.renewal_id} ({renewal.nypl.rdat})</div>}
-            {renewal.nypl.expiration_year && <div style={{ color: "#b94a3b", fontWeight: 600, marginTop: "0.25rem" }}>Expires: January 1, {renewal.nypl.expiration_year + 1}</div>}
+            {renewal.nypl.expiration_year && <div style={{ color: "#b94a3b", fontWeight: 600, marginTop: "0.25rem" }}>Enters the Public Domain: January 1, {renewal.nypl.expiration_year + 1}</div>}
           </div>
         )}
         {!renewal.found && (
@@ -194,7 +194,8 @@ function UserBubble({ question }: { question: string }) {
 
 // Compass response — left-aligned, no card, flows on background
 function CompassResponse({ entry }: { entry: HistoryEntry }) {
-  const { status, label } = parseStatus(entry.result.answer);
+  const status = entry.result.status ?? null;
+  const label = status ? (STATUS_LABELS[status] ?? "") : "";
   const confidence = parseConfidence(entry.result.answer);
   const statusStyle = status ? STATUS_STYLES[status] : null;
   const confStyle = confidence ? CONF_STYLES[confidence] : null;
@@ -211,6 +212,23 @@ function CompassResponse({ entry }: { entry: HistoryEntry }) {
           {entry.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
       </div>
+
+      {/* Work title */}
+      {entry.result.renewal.applicable && entry.result.renewal.title && (
+        <div style={{ paddingLeft: "2.125rem", marginBottom: "0.625rem" }}>
+          <span style={{
+            fontFamily: "var(--font-baskerville), serif",
+            fontSize: "1rem",
+            fontWeight: 700,
+            color: "#1e3a5f",
+            fontStyle: "italic"
+          }}>
+            {entry.result.renewal.stanford?.title
+              || entry.result.renewal.nypl?.title
+              || entry.result.renewal.title}
+          </span>
+        </div>
+      )}
 
       {/* Status pills — shown when a determination was made */}
       {statusStyle && (
@@ -233,17 +251,7 @@ function CompassResponse({ entry }: { entry: HistoryEntry }) {
           <ReactMarkdown>{entry.result.answer}</ReactMarkdown>
         </div>
         <RenewalBadge renewal={entry.result.renewal} />
-        {entry.result.chunks.length > 0 && (
-          <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" as const, alignItems: "center" }}>
-            <span style={{ fontSize: "0.68rem", color: "#9ba6e0", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Sources</span>
-            {entry.result.chunks.map((c) => (
-              <span key={c.chunk_id} style={{ fontSize: "0.73rem", color: "#7480d4", backgroundColor: "#eef0fb", padding: "0.2rem 0.5rem", borderRadius: "0.375rem", fontWeight: 400 }}>
-                {c.chunk_id}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+         </div>
     </div>
   );
 }
@@ -564,7 +572,7 @@ export default function CompassPage() {
                       <div className="thinking-dot" style={{ animationDelay: "0.36s" }} />
                     </div>
                     <span style={{ fontSize: "0.8rem", color: "#9ba6e0", fontWeight: 300 }}>
-                      Searching renewal records · cross-referencing copyright law
+                      Searching...
                     </span>
                   </div>
                 </div>
