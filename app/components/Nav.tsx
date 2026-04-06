@@ -47,7 +47,10 @@ export default function Nav() {
                   Compass
                   </Link>
                 <Link href="/navigator" className="flex items-center justify-between px-4 py-[10px] text-[15px] text-navy no-underline hover:bg-gray-50 transition-colors" onClick={() => setServicesOpen(false)}>
-                  Navigator                  
+                  Navigator
+                </Link>
+                <Link href="/history" className="flex items-center justify-between px-4 py-[10px] text-[15px] text-navy no-underline hover:bg-gray-50 transition-colors" onClick={() => setServicesOpen(false)}>
+                  Copyright History
                 </Link>
                              </div>
             )}

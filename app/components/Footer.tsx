@@ -42,7 +42,7 @@ export default function Footer() {
               GitHub
             </a>
             <span style={{ color: 'rgba(240,237,232,0.2)' }}>·</span>
-            <Link href="/contact" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>Contact</Link>
+            <Link href="mailto:contact@crnexus.org" className="text-[14px] font-light no-underline" style={{ color: 'rgba(240,237,232,0.72)' }}>Contact</Link>
           </div>
         </div>
         <div className="pt-5 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>

@@ -81,8 +81,8 @@ export default function ServicesPage() {
           >
             Copyright Nexus is a suite of research services designed to help
             librarians, archivists, and digital collections managers determine
-            copyright status accurately — without needing dedicated legal staff.
-            Each service addresses a different part of the research workflow.
+            copyright status accurately, without needing dedicated legal staff.
+            Each service is designed for differnt workflows and needs.
           </p>
 
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' as const }}>
@@ -171,8 +171,8 @@ export default function ServicesPage() {
                   marginBottom: '1.25rem',
                 }}
               >
-                The flagship service. Describe any work in plain language and
-                Compass determines copyright status using AI-powered reasoning
+                Describe any work in plain language and Compass
+                determines copyright status using AI-powered reasoning
                 across multiple renewal databases and copyright law sources.
               </p>
               <p
@@ -184,10 +184,9 @@ export default function ServicesPage() {
                   marginBottom: '1.75rem',
                 }}
               >
-                Every determination includes a confidence level, a recommended
-                RightsStatements.org designation with URI, the legal basis for
-                the decision, and specific research steps if further verification
-                is needed.
+                Every determination includes a confidence level, the legal basis for
+                the decision, specific reserach steps for futher verification, and a 
+                recommended RightsStatements.org designation.
               </p>
 
               <ServiceFeature text="Checks Stanford, NYPL, and USCO renewal databases" />
@@ -273,9 +272,9 @@ export default function ServicesPage() {
                   marginBottom: '1.25rem',
                 }}
               >
-                A structured, step-by-step decision tree for professionals who
-                prefer a guided workflow over a conversational interface.
-                Navigator walks you through the same copyright determination
+                Step-by-step decision tree for professionals who
+                prefer a guided workflow.
+                Navigator walks you through the copyright determination
                 logic one question at a time.
               </p>
               <p
@@ -291,7 +290,7 @@ export default function ServicesPage() {
                 you want to document your decision process step by step.
               </p>
 
-              <ServiceFeature text="No ambiguity — binary yes/no questions throughout" />
+              <ServiceFeature text="No ambiguity. Answer guides questions." />
               <ServiceFeature text="Covers all major copyright scenarios and periods" />
               <ServiceFeature text="Produces a recommended rights statement at each endpoint" />
 
