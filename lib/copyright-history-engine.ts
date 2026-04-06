@@ -363,48 +363,39 @@ export function buildTimeline(
   renewed: boolean | null,
   renewalYear: number | null,
   renewalRecords: RenewalRecord[],
-  status: CopyrightStatusResult
+  status: CopyrightStatusResult,
+  title: string
 ): TimelineEvent[] {
   if (!pubYear) return [];
 
   const events: TimelineEvent[] = [];
 
-  // Publication
+  // Publication — combined with term-start since they always share the same year
+  let pubDetail: string;
+  if (pubYear < 1930) {
+    pubDetail = "Work published; 95-year maximum term begins.";
+  } else if (pubYear <= 1963) {
+    pubDetail = "Initial 28-year copyright term begins.";
+  } else if (pubYear <= 1977) {
+    pubDetail = "Initial 28-year copyright term begins. Renewal automatic per the Copyright Renewal Act of 1992.";
+  } else {
+    pubDetail = "Work first published in the United States.";
+  }
   events.push({
     year: pubYear,
     event: "First Publication",
-    detail: `Work first published in the United States.`,
+    detail: pubDetail,
     type: "publication",
   });
 
-  // Initial registration / term start
-  if (pubYear >= 1930 && pubYear <= 1977) {
-    events.push({
-      year: pubYear,
-      event: "Copyright Registration",
-      detail: `28-year initial copyright term begins${pubYear <= 1963 ? " (renewal required in year 28)" : " (renewal later made automatic)"}`,
-      type: "registration",
-    });
-  } else if (pubYear < 1930) {
-    events.push({
-      year: pubYear,
-      event: "Copyright Notice",
-      detail: "Copyright notice affixed; 95-year maximum term begins.",
-      type: "registration",
-    });
-  }
-
-  // Renewal or lapse
+  // Renewal or lapse (1930–1963 only)
   if (pubYear >= 1930 && pubYear <= 1963) {
     const renewalWindowStart = pubYear + 27;
     const renewalWindowEnd = pubYear + 28;
+    const extensionYears = 95 - 28; // always 67
 
     if (renewed === true && renewalYear) {
       const bestRecord = renewalRecords[0];
-      const regNum =
-        bestRecord?.renewalNum ||
-        bestRecord?.originalRegNum ||
-        "record on file";
       const claimant =
         bestRecord?.authorOrClaimant
           ?.split(";")[0]
@@ -414,7 +405,7 @@ export function buildTimeline(
       events.push({
         year: renewalYear,
         event: "Renewal Filed",
-        detail: `${regNum} — renewed by ${claimant}. 95-year term confirmed.`,
+        detail: `"${title}" renewed by ${claimant}, extending copyright for another ${extensionYears} years.`,
         type: "renewal",
       });
     } else if (renewed === false) {
@@ -439,7 +430,7 @@ export function buildTimeline(
     events.push({
       year: CURRENT_YEAR,
       event: "Today",
-      detail: `Still protected. ${status.expiresLabel || ""}`,
+      detail: "Still protected by copyright.",
       type: "today",
       isToday: true,
     });
@@ -450,17 +441,16 @@ export function buildTimeline(
     if (status.status === "Public Domain" && status.expiresYear <= CURRENT_YEAR) {
       events.push({
         year: status.expiresYear,
-        event: "Entered Public Domain",
-        detail:
-          status.notes.split(".")[0] + ".",
+        event: `January 1, ${status.expiresYear} — Entered Public Domain`,
+        detail: status.notes.split(".")[0] + ".",
         type: "expiry",
       });
     } else if (status.expiresYear > CURRENT_YEAR) {
       const yearsLeft = status.expiresYear - CURRENT_YEAR;
       events.push({
         year: status.expiresYear,
-        event: "Enters Public Domain",
-        detail: `95-year term ends. Available for unrestricted use in ~${yearsLeft} year${yearsLeft !== 1 ? "s" : ""}.`,
+        event: `January 1, ${status.expiresYear} — Enters Public Domain`,
+        detail: `Available for unrestricted use in ${yearsLeft} year${yearsLeft !== 1 ? "s" : ""}.`,
         type: "expiry",
       });
     }
@@ -532,22 +522,55 @@ export function assembleCopyrightHistory(params: {
 
   const allRecords = [...stanfordRecords, ...nyplRecords, ...uscoRecords];
 
-  // Best publication year
-  const pubYears = [pubYearHint].filter(Boolean) as number[];
-  allRecords.forEach((r) => {
-    if (r.pubYear && r.pubYear >= 1800 && r.pubYear <= CURRENT_YEAR)
-      pubYears.push(r.pubYear);
-  });
-  const pubYear = pubYears.length > 0 ? Math.min(...pubYears) : null;
+  // ── Step 1: Publication year ─────────────────────────────────────────────
+  // User hint is authoritative. Only fall back to records if no hint given,
+  // and cross-validate each record's pubYear against its renewalYear:
+  // a renewal must be filed ~28 years after publication (allow ±7 for
+  // data-quality variance). A record with pubYear=1934 and renewalYear=1953
+  // (gap=19) fails this check and is ignored for year derivation.
+  let pubYear: number | null = pubYearHint;
 
-  // Renewal determination (only for 1923–1963 publications)
-  let renewed: boolean | null = null;
-  if (pubYear && pubYear >= 1923 && pubYear <= 1963) {
-    renewed = allRecords.length > 0;
+  if (!pubYear) {
+    // Only derive pub year from high-confidence matches — same bar as the
+    // display threshold. Loosely-matching records for different editions or
+    // similarly-titled works have too high a chance of carrying the wrong year.
+    const highConfidenceRecords = allRecords.filter(
+      (r) => r.similarity >= 0.75
+    );
+    const recordPubYears: number[] = [];
+    highConfidenceRecords.forEach((r) => {
+      if (!r.pubYear || r.pubYear < 1800 || r.pubYear > CURRENT_YEAR) return;
+      if (r.renewalYear) {
+        const gap = r.renewalYear - r.pubYear;
+        if (gap >= 21 && gap <= 35) recordPubYears.push(r.pubYear);
+      } else {
+        recordPubYears.push(r.pubYear);
+      }
+    });
+    pubYear = recordPubYears.length > 0 ? Math.min(...recordPubYears) : null;
   }
 
-  // Best renewal year
-  const renewalYears = allRecords
+  // ── Step 2: Filter to records consistent with the pub year ───────────────
+  // Only records whose pubYear is within ±2 years of the known pub year,
+  // or whose renewalYear falls in the expected window (pubYear+21 to
+  // pubYear+35), are used for renewal determination.
+  const renewalEligibleRecords = pubYear
+    ? allRecords.filter((r) => {
+        if (r.pubYear) return Math.abs(r.pubYear - pubYear!) <= 2;
+        if (r.renewalYear)
+          return r.renewalYear >= pubYear! + 21 && r.renewalYear <= pubYear! + 35;
+        return false;
+      })
+    : allRecords;
+
+  // ── Step 3: Renewal determination ────────────────────────────────────────
+  let renewed: boolean | null = null;
+  if (pubYear && pubYear >= 1923 && pubYear <= 1963) {
+    renewed = renewalEligibleRecords.length > 0;
+  }
+
+  // Best renewal year (from consistent records only)
+  const renewalYears = renewalEligibleRecords
     .map((r) => r.renewalYear)
     .filter((y): y is number => !!y && y >= 1950 && y <= 1995);
   const renewalYear = renewalYears.length > 0 ? Math.min(...renewalYears) : null;
@@ -558,8 +581,9 @@ export function assembleCopyrightHistory(params: {
     pubYear,
     renewed,
     renewalYear,
-    allRecords,
-    copyrightStatus
+    renewalEligibleRecords,
+    copyrightStatus,
+    title
   );
 
   const sourcesWithHits = [
