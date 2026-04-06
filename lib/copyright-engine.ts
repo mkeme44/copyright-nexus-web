@@ -6,12 +6,12 @@
  *   1. Extract work info — title / author / year / work_type
  *   2. Run all lookups in parallel:
  *        a. Supabase knowledge chunks (always)
- *        b. Stanford + NYPL + USCO renewal DBs  (published 1923–1963 works)
+ *        b. Stanford + NYPL + USCO renewal DBs  (published works: less than 96 years old through 1963)
  *        c. Wikidata author death-date lookup    (unpublished works)
  *   3. CRMS cross-validation (if any renewal hit found — sequential, needs renewal numbers)
  *   4. Generate structured answer via GPT-4o
  *
- * Renewal databases searched for 1923–1963 published works:
+ * Renewal databases searched for published works less than 96 years old but no later than 1963:
  *   search_renewals        → Stanford (246k book renewals)
  *   search_nypl_renewals   → NYPL CCE (445k all-class records, 1950–1991)
  *   search_usco_renewals   → USCO CPRS (~908k RE-prefixed records)
@@ -245,7 +245,7 @@ Rules:
     If the question names only ONE person in a clear authorship context, extract that person as author.
     Apply the same follow-up rule as title: only carry from history if current question is a short follow-up.
 - year: publication year as integer from current question or follow-up context, or null
-- needs_renewal_check: true only if the current question (not just history) involves or could involve a published work in the 1923-1963 range
+- needs_renewal_check: true only if the current question (not just history) involves or could involve a published work that is less than 96 years old but no later than 1963 (i.e., published recently enough that copyright may not have expired yet, but before automatic renewal applied)
 - work_type:
     "unpublished" — if the question mentions letters, manuscripts, diaries, personal papers, archival materials, correspondence, or explicitly says "unpublished"
     "published"   — if the question mentions books, magazines, newspapers, journals, or published works
@@ -609,14 +609,19 @@ function normalizeRenewalId(id: string): string {
 // Runs Stanford + NYPL + USCO in parallel, then CRMS-validates any hits found.
 
 async function performRenewalLookup(
-  info: WorkInfo
+  info: WorkInfo,
+  currentYear: number
 ): Promise<RenewalResult> {
   if (!info.needs_renewal_check || !info.title) {
     console.log(`[Compass] Renewal lookup: skipped (needs_renewal_check=${info.needs_renewal_check}, title=${info.title ?? "null"})`);
     return { applicable: false };
   }
-  if (info.year && !(info.year >= 1923 && info.year <= 1963)) {
-    console.log(`[Compass] Renewal lookup: skipped (year ${info.year} outside 1923–1963 window)`);
+  // Lower bound is rolling: copyright expires 95 years after publication, so works
+  // published in currentYear - 96 or earlier are already public domain — no renewal check needed.
+  // Upper bound of 1963 is fixed: automatic renewal began with works published that year.
+  const renewalWindowStart = currentYear - 96 + 1; // first year that still needs a renewal check
+  if (info.year && !(info.year >= renewalWindowStart && info.year <= 1963)) {
+    console.log(`[Compass] Renewal lookup: skipped (year ${info.year} outside ${renewalWindowStart}–1963 window)`);
     return { applicable: false };
   }
 
@@ -840,12 +845,26 @@ function formatWikidataContext(wikidata: WikidataResult): string {
 
 // ── Answer generation ──────────────────────────────────────────────────────────
 
+// Maps structured status values to their authoritative RightsStatements.org labels.
+// Used to inject the correct rights statement into the GPT context so the model
+// cannot independently select a different statement.
+const STRUCTURED_RIGHTS: Record<
+  "in-copyright" | "public-domain" | "undetermined",
+  { label: string; uri: string }
+> = {
+  "in-copyright":  { label: "In Copyright",              uri: "https://rightsstatements.org/vocab/InC/1.0/"    },
+  "public-domain": { label: "No Copyright — United States", uri: "https://rightsstatements.org/vocab/NoC-US/1.0/" },
+  "undetermined":  { label: "Copyright Undetermined",    uri: "https://rightsstatements.org/vocab/UND/1.0/"    },
+};
+
 async function generateAnswer(
   question: string,
   chunks: ChunkResult[],
   renewal: RenewalResult,
   wikidata: WikidataResult | null,
-  history: ConversationTurn[]
+  history: ConversationTurn[],
+  status: "in-copyright" | "public-domain" | "undetermined" | null,
+  needsClarification: boolean
 ): Promise<string> {
   const openai = getOpenAI();
   const renewalContext = formatRenewalContext(renewal);
@@ -856,6 +875,27 @@ async function generateAnswer(
   );
   if (renewalContext) contextParts.push(renewalContext);
   if (wikidataContext) contextParts.push(wikidataContext);
+
+  // When the structured engine has produced a definitive status, inject it as an
+  // authoritative block so GPT cannot select a contradicting rights statement.
+  if (status !== null) {
+    const rights = STRUCTURED_RIGHTS[status];
+    contextParts.push(
+      `[STRUCTURED ENGINE RESULT — AUTHORITATIVE]\n` +
+      `The copyright determination engine has computed a structured status for this work.\n` +
+      `You MUST reproduce these values exactly in the RIGHTS STATEMENT field of your response:\n` +
+      `  Status:           ${status.toUpperCase().replace("-", " ")}\n` +
+      `  Rights Statement: ${rights.label}\n` +
+      `  URI:              ${rights.uri}\n` +
+      (needsClarification
+        ? `\nNo renewal database search was performed because no title was supplied.\n` +
+          `Do NOT characterize the likelihood of public domain or copyright status.\n` +
+          `Do NOT cite renewal statistics as grounds for a probabilistic conclusion.\n` +
+          `Ask for the title so the databases can be searched.`
+        : "")
+    );
+  }
+
   const context = contextParts.join("\n\n---\n\n");
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -865,7 +905,7 @@ async function generateAnswer(
 
 ## DATA SOURCES AVAILABLE TO YOU
 
-**Renewal databases** (automatically queried for 1923–1963 published works — results in context):
+**Renewal databases** (automatically queried for published works less than 96 years old but no later than 1963 — the copyright renewal research window — results in context):
 - Stanford Renewal DB: 246k book renewals
 - New York Public Library Catalog of Copyright Entries (NYPL CCE): 445k all-class records (1950–1991) — link: https://archive.org/details/copyrightrecords
 - USCO CPRS: ~908k RE-prefixed renewal records
@@ -897,9 +937,19 @@ URI: [full URI]
 Give a determination based on the Wikidata death-date result using the same structured format above. If the author was not found in Wikidata, tell the user the status is undetermined and suggest manual research sources.
 When providing a Public Domain or In Copyright determination for an unpublished work, always include a scope note after the RIGHTS STATEMENT making clear that this determination applies to the unpublished work only. Example: "⚠ Scope note: This determination applies to unpublished works only. If [author name] also created published works, those works may have different copyright status depending on their publication date and whether copyright was renewed."
 
-**Case 4 — Question involves 1923–1963 range but NO specific title is available:**
-Do NOT output "Undetermined" with a list of tasks for the user.
-Instead, explain briefly that the answer depends on whether copyright was renewed, and ask for the title so you can check the databases yourself. Keep it to 1–2 sentences.
+**Case 4 — Year is in the renewal research window (less than 96 years old but no later than 1963) but NO specific title is provided:**
+The renewal databases have not been searched because no title was given. Status is genuinely unknown. Use the structured determination format:
+
+**CONFIDENCE:** Medium
+**REASONING:** The work falls within the copyright renewal window. Without a title, the renewal databases cannot be searched and no determination is possible.
+**ACTION ITEMS:** Provide the title of the work so I can search the renewal databases and give you a definitive determination.
+**RIGHTS STATEMENT:** Copyright Undetermined
+URI: https://rightsstatements.org/vocab/UND/1.0/
+
+Critical constraints for Case 4:
+- Do NOT characterize the work as "likely public domain," "probably in copyright," or any probabilistic lean in either direction.
+- Do NOT cite renewal statistics (e.g., "only 15% of copyrights were renewed," "most works were not renewed") as a basis for any status conclusion. Renewal statistics explain why a title search is important — they are not a substitute for actually searching. A practitioner who acts on a statistical lean without verifying the title may wrongly treat an in-copyright work as public domain.
+- The only correct output is: status unknown, provide the title, then I can check.
 
 **Case 5 — Follow-up that provides a title or more detail:**
 Use the full conversation history to understand what work is being discussed, then provide a determination using the data now in context.
@@ -909,10 +959,11 @@ Use the full conversation history to understand what work is being discussed, th
 - NEVER tell users to check Wikidata for unpublished works — you query it automatically.
 - When mentioning the NYPL renewal database in your response, always write its full name as a markdown hyperlink: [New York Public Library Catalog of Copyright Entries](https://archive.org/details/copyrightrecords). Never abbreviate it to just "NYPL CCE" in the response text.
 - When Wikidata death-date data is in context, always cite it explicitly in your REASONING. Use the Wikidata entity URL from context to write a linked attribution, e.g.: "[Author name] died in [year] according to [Wikidata](url)." Follow this immediately with: "Researchers should independently verify this date before relying on this determination."
-- When NO RENEWAL RECORD was found: state clearly the work is likely Public Domain (for US works). Include the URAA caveat for potentially foreign works.
+- When the renewal databases WERE searched (a title was provided) and NO renewal record was found: state clearly the work is likely Public Domain (for US works). Include the URAA caveat for potentially foreign works. This rule applies only when a search actually ran — it does NOT apply when no title was given and no search occurred.
 - When a RENEWAL WAS FOUND: state clearly the work is In Copyright and give the expiration year.
 - When CRMS-verified: explicitly mention this in your reasoning as it represents human confirmation.
-- Be direct and concise. Cultural heritage professionals are experienced researchers who need clear determinations, not lengthy explanations of what they should go do.`,
+- Be direct and concise. Cultural heritage professionals are experienced researchers who need clear determinations, not lengthy explanations of what they should go do.
+- When STRUCTURED ENGINE RESULT is present in context, you MUST copy the provided Rights Statement label and URI into your RIGHTS STATEMENT field exactly as given. Do not derive or substitute a different rights statement — the structured engine result is authoritative and overrides any independent analysis.`,
     },
   ];
 
@@ -944,16 +995,26 @@ Use the full conversation history to understand what work is being discussed, th
 function computeStatus(
   renewal: RenewalResult,
   wikidata: WikidataResult | null,
-  workYear: number | null
+  workYear: number | null,
+  currentYear: number,
+  needsClarification: boolean = false
 ): "in-copyright" | "public-domain" | "undetermined" | null {
   // Renewal window: engine searched the databases and got a definitive answer
   if (renewal.applicable) {
     return renewal.found ? "in-copyright" : "public-domain";
   }
 
-  // Pre-1923: outside the renewal window, always public domain in the US
-  if (workYear && workYear < 1923) {
+  // Before the rolling public-domain cutoff: copyright expires 95 years after publication,
+  // so works published in currentYear - 96 or earlier are always public domain in the US.
+  if (workYear && workYear <= currentYear - 96) {
     return "public-domain";
+  }
+
+  // Year is in the renewal research window but no title was supplied, so the
+  // renewal databases were never searched. Status is genuinely unknown — return
+  // a structured "undetermined" rather than falling through to the null / general-rule path.
+  if (needsClarification) {
+    return "undetermined";
   }
 
   // Wikidata lookup ran (unpublished work with a named author)
@@ -966,7 +1027,6 @@ function computeStatus(
     if (wikidata.likelyAlive) return "in-copyright";
     // Found, death date confirmed → compute against current year
     if (wikidata.deathYear !== null && wikidata.copyrightExpiry !== null) {
-      const currentYear = new Date().getFullYear();
       return currentYear <= wikidata.copyrightExpiry ? "in-copyright" : "public-domain";
     }
     // Found but death date couldn't be parsed
@@ -992,6 +1052,10 @@ export async function runQuery(
   console.log(`\n[Compass] ── New query ──────────────────────────────────`);
   console.log(`[Compass] Question: "${question.slice(0, 120)}"`);
 
+  // Calculate currentYear once for this request — used consistently across all
+  // cutoff logic (renewal window guard, public-domain short-circuit, Wikidata expiry).
+  const currentYear = new Date().getFullYear();
+
   // Step 1: Extract work info (determines which lookups to run)
   const workInfo = await extractWorkInfo(question, history);
   console.log(`[Compass] Work info: type=${workInfo.work_type} | title=${workInfo.title ?? "null"} | author=${workInfo.author ?? "null"} | year=${workInfo.year ?? "null"} | renewal_check=${workInfo.needs_renewal_check}`);
@@ -1003,7 +1067,7 @@ export async function runQuery(
 
   const [chunks, renewal, wikidata] = await Promise.all([
     searchChunks(searchQuestion),
-    performRenewalLookup(workInfo),
+    performRenewalLookup(workInfo, currentYear),
     shouldLookupWikidata
       ? lookupWikidata(workInfo.author!)
       : Promise.resolve(null),
@@ -1014,7 +1078,7 @@ export async function runQuery(
     !workInfo.title &&
     !renewal.applicable;
 
-  const status = computeStatus(renewal, wikidata, workInfo.year);
+  const status = computeStatus(renewal, wikidata, workInfo.year, currentYear, needsClarification);
   console.log(`[Compass] Status: ${status ?? "null (general rule — no badge)"}`);
 
   const answer = await generateAnswer(
@@ -1022,7 +1086,9 @@ export async function runQuery(
     chunks,
     renewal,
     wikidata,
-    history
+    history,
+    status,
+    needsClarification
   );
 
   return {
