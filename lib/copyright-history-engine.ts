@@ -106,21 +106,67 @@ export interface CopyrightHistory {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const RESEARCH_LINKS = [
-  {
-    label: "Stanford Copyright Renewals",
-    url: "https://exhibits.stanford.edu/copyrightrenewals",
-  },
-  { label: "NYPL CCE Search", url: "https://cce-search.nypl.org/" },
-  {
-    label: "USCO Public Records (CPRS)",
-    url: "https://publicrecords.copyright.gov/",
-  },
-  {
-    label: "Copyright Office Catalog",
-    url: "https://cocatalog.loc.gov/",
-  },
-];
+/**
+ * Fetch the first publication year for a title from Open Library.
+ * Returns null on timeout (4 s default), network error, or no match — never throws.
+ * Priority in the pub-year chain: user hint → Open Library → high-confidence Supabase records.
+ */
+export async function fetchOpenLibraryYear(
+  title: string,
+  author: string | null,
+  timeoutMs = 4000
+): Promise<number | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const qs = new URLSearchParams({
+      title,
+      fields: "first_publish_year,title",
+      limit: "3",
+    });
+    if (author) qs.set("author", author);
+
+    const res = await fetch(`https://openlibrary.org/search.json?${qs.toString()}`, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "CopyrightNexus/1.0 (crnexus.org; copyright research tool)",
+      },
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) return null;
+
+    const json = await res.json() as { docs?: { first_publish_year?: number }[] };
+    const docs = json?.docs ?? [];
+    if (!docs.length) return null;
+
+    const year = docs[0]?.first_publish_year;
+    if (typeof year === "number" && year >= 1800 && year <= new Date().getFullYear()) {
+      return year;
+    }
+    return null;
+  } catch {
+    // Timeout, network error, JSON parse failure — degrade gracefully.
+    return null;
+  }
+}
+
+function buildResearchLinks(
+  title: string,
+  author: string | null
+): { label: string; url: string }[] {
+  const olUrl = `https://openlibrary.org/search?title=${encodeURIComponent(title)}${
+    author ? `&author=${encodeURIComponent(author)}` : ""
+  }`;
+  return [
+    { label: "Open Library", url: olUrl },
+    { label: "Stanford Copyright Renewals", url: "https://exhibits.stanford.edu/copyrightrenewals" },
+    { label: "NYPL CCE Search", url: "https://cce-search.nypl.org/" },
+    { label: "USCO Public Records (CPRS)", url: "https://publicrecords.copyright.gov/" },
+    { label: "Copyright Office Catalog", url: "https://cocatalog.loc.gov/" },
+  ];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Period classification
@@ -500,11 +546,13 @@ export function assembleCopyrightHistory(params: {
   title: string;
   author: string | null;
   pubYearHint: number | null;
+  /** Year fetched from Open Library — used when user provides no hint. */
+  openLibraryYear?: number | null;
   stanfordRows: Record<string, unknown>[];
   nyplRows: Record<string, unknown>[];
   uscoRows: Record<string, unknown>[];
 }): CopyrightHistory {
-  const { title, author, pubYearHint, stanfordRows, nyplRows, uscoRows } =
+  const { title, author, pubYearHint, openLibraryYear = null, stanfordRows, nyplRows, uscoRows } =
     params;
 
   const SIMILARITY_CUTOFF = 0.45;
@@ -528,7 +576,8 @@ export function assembleCopyrightHistory(params: {
   // a renewal must be filed ~28 years after publication (allow ±7 for
   // data-quality variance). A record with pubYear=1934 and renewalYear=1953
   // (gap=19) fails this check and is ignored for year derivation.
-  let pubYear: number | null = pubYearHint;
+  // Priority: user hint → Open Library → high-confidence Supabase records.
+  let pubYear: number | null = pubYearHint ?? openLibraryYear ?? null;
 
   if (!pubYear) {
     // Only derive pub year from high-confidence matches — same bar as the
@@ -603,6 +652,6 @@ export function assembleCopyrightHistory(params: {
     sourcesWithHits,
     copyrightStatus,
     timeline,
-    researchLinks: RESEARCH_LINKS,
+    researchLinks: buildResearchLinks(title, author),
   };
 }

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { assembleCopyrightHistory } from "@/lib/copyright-history-engine";
+import { assembleCopyrightHistory, fetchOpenLibraryYear } from "@/lib/copyright-history-engine";
 
 // ── Supabase client ──────────────────────────────────────────────────────────
 
@@ -117,18 +117,20 @@ export async function POST(req: NextRequest) {
     result_limit: 5,
   };
 
-  const [stanfordRows, nyplRows, uscoRows] = needsRenewalLookup
-    ? await Promise.all([
-        rpcWithRetry(supabase, "search_renewals", baseParams),
-        rpcWithRetry(supabase, "search_nypl_renewals", baseParams),
-        rpcWithRetry(supabase, "search_usco_renewals", baseParams),
-      ])
-    : [[], [], []];
+  // All four fetches fire in parallel. Open Library is only called when the user
+  // didn't supply a year (user hint always wins; no need to burn the OL request).
+  const [stanfordRows, nyplRows, uscoRows, openLibraryYear] = await Promise.all([
+    needsRenewalLookup ? rpcWithRetry(supabase, "search_renewals", baseParams)       : Promise.resolve([]),
+    needsRenewalLookup ? rpcWithRetry(supabase, "search_nypl_renewals", baseParams)  : Promise.resolve([]),
+    needsRenewalLookup ? rpcWithRetry(supabase, "search_usco_renewals", baseParams)  : Promise.resolve([]),
+    !pubYear           ? fetchOpenLibraryYear(title, author)                         : Promise.resolve(null),
+  ]);
 
   const history = assembleCopyrightHistory({
     title,
     author,
     pubYearHint: pubYear,
+    openLibraryYear: openLibraryYear as number | null,
     stanfordRows: stanfordRows as Record<string, unknown>[],
     nyplRows: nyplRows as Record<string, unknown>[],
     uscoRows: uscoRows as Record<string, unknown>[],
