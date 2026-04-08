@@ -145,9 +145,9 @@ export default function Home() {
                 <p className="text-[14px] font-light text-muted-text leading-[1.7] mb-5">
                   Search by title and author to retrieve the full copyright lifecycle of a specific work, including original registration, renewal records, current status, and projected expiration date.
                 </p>
-                <span className="inline-block text-[13px] font-semibold text-gray-400 bg-gray-100 px-4 py-2 rounded">
-                  Coming Soon
-                </span>
+                <a href="/history" className="inline-block text-[13px] font-semibold text-white bg-periwinkle px-4 py-2 rounded no-underline hover:bg-[#6570c4] transition-colors duration-150">
+                  Open History
+                </a>
               </div>
               <div className="bg-white p-8" style={{ borderTop: '4px solid #7480d4', borderLeft: '4px solid #7480d4', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', borderRadius: '12px' }}>
                 <h3 className="text-[19px] font-bold text-navy mb-1" style={{ fontFamily: 'Libre Baskerville, Georgia, serif' }}>
