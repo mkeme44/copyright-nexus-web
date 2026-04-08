@@ -70,6 +70,8 @@ async function rpcWithRetry(
 // ── POST handler ──────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const t0 = Date.now();
+
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (!checkRateLimit(ip)) {
     return NextResponse.json(
@@ -99,16 +101,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── Log request ──────────────────────────────────────────────────────────────
+  console.log(`[History] ${"─".repeat(60)}`);
+  console.log(`[History] Query: title="${title}" | author=${author ? `"${author}"` : "null"} | pubYear=${pubYear ?? "null (not provided)"}`);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let supabase: any;
   try {
     supabase = getSupabase();
   } catch (err) {
-    console.error("[copyright-history] Supabase init failed:", err);
+    console.error("[History] Supabase init failed:", err);
     return NextResponse.json({ error: "Database connection failed." }, { status: 503 });
   }
 
   const needsRenewalLookup = !pubYear || (pubYear >= 1923 && pubYear <= 1963);
+  console.log(
+    `[History] Renewal lookup: ${
+      needsRenewalLookup
+        ? pubYear
+          ? `YES — pub year ${pubYear} is in the 1923–1963 renewal window`
+          : "YES — no pub year provided, searching all databases"
+        : `NO — pub year ${pubYear} is outside the renewal window`
+    }`
+  );
+  if (!pubYear) {
+    console.log(`[History] Open Library: fetching pub year for "${title}"${author ? ` by "${author}"` : ""} (4 s timeout)`);
+  }
 
   const baseParams = {
     search_title: title,
@@ -126,6 +144,40 @@ export async function POST(req: NextRequest) {
     !pubYear           ? fetchOpenLibraryYear(title, author)                         : Promise.resolve(null),
   ]);
 
+  // ── Log database results ─────────────────────────────────────────────────────
+  function logDbResult(label: string, rows: unknown[]) {
+    if (!needsRenewalLookup) {
+      console.log(`[History] ${label.padEnd(10)} skipped (outside renewal window)`);
+      return;
+    }
+    if (!rows.length) {
+      console.log(`[History] ${label.padEnd(10)} 0 rows returned`);
+      return;
+    }
+    const top = rows[0] as Record<string, unknown>;
+    const sim = top.similarity_score as number | undefined;
+    const topTitle = (top.title ?? top.matched_title ?? "?") as string;
+    const recordId = (top.renewal_num ?? top.renewal_id ?? top.registration_number ?? top.reg_num ?? "—") as string;
+    console.log(
+      `[History] ${label.padEnd(10)} ${rows.length} row${rows.length !== 1 ? "s" : ""} | ` +
+      `top: "${topTitle}" @ ${sim !== undefined ? Math.round(sim * 100) + "%" : "?%"} | ` +
+      `record: ${recordId}`
+    );
+  }
+
+  logDbResult("Stanford", stanfordRows);
+  logDbResult("NYPL", nyplRows);
+  logDbResult("USCO", uscoRows);
+
+  if (!pubYear) {
+    console.log(
+      `[History] Open Library: ${
+        openLibraryYear !== null ? `returned ${openLibraryYear}` : "no result (timeout, 404, or no match)"
+      }`
+    );
+  }
+
+  // ── Assemble result ──────────────────────────────────────────────────────────
   const history = assembleCopyrightHistory({
     title,
     author,
@@ -135,6 +187,35 @@ export async function POST(req: NextRequest) {
     nyplRows: nyplRows as Record<string, unknown>[],
     uscoRows: uscoRows as Record<string, unknown>[],
   });
+
+  // ── Log assembled result ─────────────────────────────────────────────────────
+  const pubYearSource =
+    pubYear                                         ? "user-provided hint"
+    : openLibraryYear && history.pubYear === openLibraryYear ? "Open Library"
+    : history.pubYear                               ? "Supabase records (high-confidence)"
+    :                                                 "unknown — could not determine";
+
+  console.log(`[History] Pub year: ${history.pubYear ?? "null"} (source: ${pubYearSource})`);
+  console.log(`[History] Period:   ${history.periodLabel}`);
+
+  if (history.renewed === null) {
+    console.log(`[History] Renewal:  N/A (not in 1923–1963 window)`);
+  } else if (history.renewed === true) {
+    console.log(`[History] Renewal:  FOUND — year ${history.renewalYear ?? "unknown"} | sources: ${history.sourcesWithHits.join(", ")}`);
+  } else {
+    console.log(`[History] Renewal:  NOT FOUND in any database${history.sourcesWithHits.length ? ` (hits above cutoff: ${history.sourcesWithHits.join(", ")})` : ""}`);
+  }
+
+  const cs = history.copyrightStatus;
+  console.log(
+    `[History] Status:   ${cs.status} | confidence: ${cs.confidence} | ` +
+    `expires: ${cs.expiresYear ?? "N/A"} | URI: ${cs.uri}`
+  );
+  if (cs.warnings.length) {
+    cs.warnings.forEach(w => console.log(`[History] ⚠ Warning: ${w.slice(0, 120)}`));
+  }
+
+  console.log(`[History] ── Done in ${Date.now() - t0}ms`);
 
   return NextResponse.json(history);
 }
