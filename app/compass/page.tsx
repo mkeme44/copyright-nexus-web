@@ -141,21 +141,31 @@ function RenewalBadge({ renewal }: { renewal: RenewalResult }) {
           <div style={{ backgroundColor: "#f8f7f5", borderRadius: "0.5rem", padding: "0.625rem 0.875rem", marginBottom: "0.5rem", fontSize: "0.85rem", color: "#4b5563", fontWeight: 300 }}>
             <div style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "0.25rem" }}>Stanford Copyright Renewal Database</div>
             <div>Matched: <em>{renewal.stanford.title}</em> · {Math.round(renewal.stanford.similarity * 100)}% match</div>
-            {renewal.stanford.renewal_num && <div>Renewal: {renewal.stanford.renewal_num} ({renewal.stanford.renewal_date})</div>}
+            {renewal.stanford.renewal_num && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                <span>Renewal: <span style={{ fontFamily: "monospace" }}>{renewal.stanford.renewal_num}</span>{renewal.stanford.renewal_date ? ` (${renewal.stanford.renewal_date})` : ""}</span>
+                <a href="https://exhibits.stanford.edu/copyrightrenewals" target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#7480d4", textDecoration: "none", fontWeight: 600, flexShrink: 0 }}>
+                  Verify ↗
+                </a>
+              </div>
+            )}
             {renewal.stanford.expiration_year && <div style={{ color: "#b94a3b", fontWeight: 600, marginTop: "0.25rem" }}>Enters the Public Domain: January 1, {renewal.stanford.expiration_year + 1}</div>}
           </div>
         )}
         {renewal.nypl && (
           <div style={{ backgroundColor: "#f8f7f5", borderRadius: "0.5rem", padding: "0.625rem 0.875rem", fontSize: "0.85rem", color: "#4b5563", fontWeight: 300 }}>
             <div style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "0.25rem" }}>
-              <a href="https://archive.org/details/copyrightrecords" target="_blank" rel="noopener noreferrer" style={{ color: "#1e3a5f", textDecoration: "none" }}
-                onMouseEnter={(e) => (e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline"}
-                onMouseLeave={(e) => (e.currentTarget as HTMLAnchorElement).style.textDecoration = "none"}>
-                New York Public Library Catalog of Copyright Entries
-              </a>
+              New York Public Library Catalog of Copyright Entries
             </div>
             <div>Matched: <em>{renewal.nypl.title}</em> · {Math.round(renewal.nypl.similarity * 100)}% match</div>
-            {renewal.nypl.renewal_id && <div>Renewal: {renewal.nypl.renewal_id} ({renewal.nypl.rdat})</div>}
+            {renewal.nypl.renewal_id && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                <span>Renewal: <span style={{ fontFamily: "monospace" }}>{renewal.nypl.renewal_id}</span>{renewal.nypl.rdat ? ` (${renewal.nypl.rdat})` : ""}</span>
+                <a href={`https://cce-search.nypl.org/?q=${encodeURIComponent(renewal.title ?? "")}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#7480d4", textDecoration: "none", fontWeight: 600, flexShrink: 0 }}>
+                  Verify ↗
+                </a>
+              </div>
+            )}
             {renewal.nypl.expiration_year && <div style={{ color: "#b94a3b", fontWeight: 600, marginTop: "0.25rem" }}>Enters the Public Domain: January 1, {renewal.nypl.expiration_year + 1}</div>}
           </div>
         )}
@@ -251,7 +261,24 @@ function CompassResponse({ entry }: { entry: HistoryEntry }) {
           <ReactMarkdown>{entry.result.answer}</ReactMarkdown>
         </div>
         <RenewalBadge renewal={entry.result.renewal} />
-         </div>
+        {/* Knowledge base chunk IDs — CC attribution for RAG sources */}
+        {entry.result.chunks && entry.result.chunks.length > 0 && (
+          <div style={{
+            marginTop: "0.875rem",
+            padding: "0.5rem 0.75rem",
+            backgroundColor: "#f8f7f5",
+            borderRadius: "0.5rem",
+            border: "1px solid #e5e7eb",
+            fontSize: "0.68rem",
+            color: "#9ba6e0",
+            fontWeight: 300,
+            lineHeight: 1.6,
+          }}>
+            <span style={{ fontWeight: 600, color: "#6b7280" }}>Knowledge base refs: </span>
+            {entry.result.chunks.map(c => c.chunk_id).join(" · ")}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
