@@ -173,7 +173,8 @@ function buildResearchLinks(
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getPeriodLabel(pubYear: number): string {
-  if (pubYear < 1930) return "Pre-1930";
+  const pdCutoff = new Date().getFullYear() - 96;
+  if (pubYear <= pdCutoff) return `Pre-${pdCutoff + 1}`;
   if (pubYear <= 1963) return "1930–1963";
   if (pubYear <= 1977) return "1964–1977";
   if (pubYear <= 1989) return "1978–1989";
@@ -181,8 +182,9 @@ function getPeriodLabel(pubYear: number): string {
 }
 
 function getPeriodRule(pubYear: number): string {
-  if (pubYear < 1930)
-    return "Maximum 95-year term has expired for all works in this period.";
+  const pdCutoff = new Date().getFullYear() - 96;
+  if (pubYear <= pdCutoff)
+    return `Maximum 95-year term has expired. Works published in ${pdCutoff} or earlier are in the public domain.`;
   if (pubYear <= 1963)
     return "Copyright notice required + renewal required in 28th year. ~93% of works were not renewed.";
   if (pubYear <= 1977)
@@ -217,8 +219,13 @@ export function determineStatus(
 
   if (pubYear === null) return noPublicationYear;
 
-  // ── Pre-1930: always Public Domain ──────────────────────────────────────
-  if (pubYear < 1930) {
+  // ── Rolling public domain cutoff ─────────────────────────────────────────
+  // Works published in (currentYear − 96) or earlier have had their 95-year
+  // maximum term expire. This boundary advances every January 1 — never
+  // hardcode a year here. Matches the formula used in the Compass engine.
+  const currentYear = new Date().getFullYear();
+  const pdCutoff = currentYear - 96; // e.g. 2026 − 96 = 1930
+  if (pubYear <= pdCutoff) {
     const exp = pubYear + 95;
     return {
       status: "Public Domain",
@@ -228,12 +235,12 @@ export function determineStatus(
       expiresYear: exp + 1,
       publicDomainYear: exp + 1,
       confidence: "High",
-      notes: `Published before 1930. The maximum 95-year term (${pubYear} + 95 = ${exp}) has expired.`,
+      notes: `Published in ${pubYear}. The maximum 95-year term (${pubYear} + 95 = ${exp}) expired on January 1, ${exp + 1}.`,
       warnings: [],
     };
   }
 
-  // ── 1930–1963: notice + renewal required ────────────────────────────────
+  // ── Renewal window (rolling lower bound through 1963) ────────────────────
   if (pubYear <= 1963) {
     if (hasNotice === false) {
       return {
@@ -571,18 +578,26 @@ export function assembleCopyrightHistory(params: {
   const allRecords = [...stanfordRecords, ...nyplRecords, ...uscoRecords];
 
   // ── Step 1: Publication year ─────────────────────────────────────────────
-  // User hint is authoritative. Only fall back to records if no hint given,
-  // and cross-validate each record's pubYear against its renewalYear:
+  // Priority: user hint (always authoritative) → high-confidence Supabase
+  // renewal records → Open Library as fallback only.
+  //
+  // Why Supabase before Open Library: renewal records are actual copyright
+  // filings and reflect the legally-significant original publication year.
+  // Open Library's first_publish_year aggregates all editions (including
+  // foreign reprints and later printings) and is unreliable without author
+  // context. OL is used as a fallback when no records are available, and
+  // as a cross-check: if it agrees with records (≤3 years) we keep the
+  // record year; if it disagrees significantly we still keep the record year
+  // and log the discrepancy.
+  //
+  // Cross-validate each record's pubYear against its renewalYear:
   // a renewal must be filed ~28 years after publication (allow ±7 for
   // data-quality variance). A record with pubYear=1934 and renewalYear=1953
   // (gap=19) fails this check and is ignored for year derivation.
-  // Priority: user hint → Open Library → high-confidence Supabase records.
-  let pubYear: number | null = pubYearHint ?? openLibraryYear ?? null;
+  let pubYear: number | null = pubYearHint;
 
   if (!pubYear) {
-    // Only derive pub year from high-confidence matches — same bar as the
-    // display threshold. Loosely-matching records for different editions or
-    // similarly-titled works have too high a chance of carrying the wrong year.
+    // Derive from high-confidence Supabase records (≥0.75 similarity).
     const highConfidenceRecords = allRecords.filter(
       (r) => r.similarity >= 0.75
     );
@@ -596,7 +611,21 @@ export function assembleCopyrightHistory(params: {
         recordPubYears.push(r.pubYear);
       }
     });
-    pubYear = recordPubYears.length > 0 ? Math.min(...recordPubYears) : null;
+    const supabaseYear = recordPubYears.length > 0 ? Math.min(...recordPubYears) : null;
+
+    if (supabaseYear !== null) {
+      pubYear = supabaseYear;
+      // Cross-check: log if OL disagrees significantly (useful for debugging
+      // OL data quality issues — the record year still wins either way).
+      if (openLibraryYear !== null && Math.abs(openLibraryYear - supabaseYear) > 3) {
+        console.warn(
+          `[History] Pub year discrepancy: records=${supabaseYear}, OL=${openLibraryYear} — keeping records year`
+        );
+      }
+    } else {
+      // No high-confidence records — fall back to Open Library.
+      pubYear = openLibraryYear;
+    }
   }
 
   // ── Step 2: Filter to records consistent with the pub year ───────────────
@@ -613,8 +642,12 @@ export function assembleCopyrightHistory(params: {
     : allRecords;
 
   // ── Step 3: Renewal determination ────────────────────────────────────────
+  // Rolling lower bound matches Compass: currentYear − 96 + 1 (= currentYear − 95).
+  // Works below this boundary have already cleared the 95-year term — no
+  // renewal check needed and `renewed` stays null (N/A).
+  const renewalWindowStart = CURRENT_YEAR - 95; // e.g. 2026 − 95 = 1931
   let renewed: boolean | null = null;
-  if (pubYear && pubYear >= 1923 && pubYear <= 1963) {
+  if (pubYear && pubYear >= renewalWindowStart && pubYear <= 1963) {
     renewed = renewalEligibleRecords.length > 0;
   }
 

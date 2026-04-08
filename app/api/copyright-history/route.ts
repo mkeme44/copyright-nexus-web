@@ -39,8 +39,8 @@ function checkRateLimit(ip: string): boolean {
 
 // ── RPC with retry ────────────────────────────────────────────────────────────
 
-const RETRY_ATTEMPTS = 3;
-const RETRY_DELAY_MS = 1500;
+const RETRY_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 500;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -114,14 +114,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Database connection failed." }, { status: 503 });
   }
 
-  const needsRenewalLookup = !pubYear || (pubYear >= 1923 && pubYear <= 1963);
+  // Rolling renewal window — matches Compass formula (currentYear − 96 + 1).
+  const currentYear = new Date().getFullYear();
+  const renewalWindowStart = currentYear - 95; // e.g. 2026 − 95 = 1931
+  const needsRenewalLookup = !pubYear || (pubYear >= renewalWindowStart && pubYear <= 1963);
   console.log(
     `[History] Renewal lookup: ${
       needsRenewalLookup
         ? pubYear
-          ? `YES — pub year ${pubYear} is in the 1923–1963 renewal window`
-          : "YES — no pub year provided, searching all databases"
-        : `NO — pub year ${pubYear} is outside the renewal window`
+          ? `YES — pub year ${pubYear} is in the ${renewalWindowStart}–1963 renewal window`
+          : `YES — no pub year provided, searching all databases`
+        : `NO — pub year ${pubYear} is outside the ${renewalWindowStart}–1963 window`
     }`
   );
   if (!pubYear) {
@@ -131,7 +134,10 @@ export async function POST(req: NextRequest) {
   const baseParams = {
     search_title: title,
     search_author: author,
-    search_pub_year: pubYear,
+    // Do not pass pub year to the DB — the engine filters by ±2 years after
+    // retrieval. Passing it here caused strict DB-level filtering that dropped
+    // valid records whose stored year differed slightly from the user's input.
+    search_pub_year: null,
     result_limit: 5,
   };
 
