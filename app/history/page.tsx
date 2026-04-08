@@ -296,6 +296,9 @@ export default function HistoryPage() {
                     onFocus={e => (e.target.style.borderColor = '#7480d4')}
                     onBlur={e  => (e.target.style.borderColor = '#e5e7eb')}
                   />
+                  <p style={{ margin: '0.4rem 0 0', fontSize: '0.72rem', color: '#9ba6e0', fontWeight: 300, lineHeight: 1.5 }}>
+                    Providing a year significantly improves accuracy, especially for works published 1930–1963.
+                  </p>
                 </div>
               </div>
 
@@ -696,6 +699,29 @@ function HistoryResults({ result }: { result: CopyrightHistory }) {
         </div>
       </div>
 
+      {/* ── Data Attribution ── */}
+      <div style={{
+        padding: '0.75rem 1.125rem',
+        backgroundColor: '#f8f7f5',
+        borderRadius: '0.625rem',
+        border: '1px solid #e5e7eb',
+        fontSize: '0.72rem',
+        color: '#6b7280',
+        fontWeight: 300,
+        lineHeight: 1.7,
+      }}>
+        <span style={{ fontWeight: 700, color: '#1e3a5f' }}>Data sources: </span>
+        <a href="https://exhibits.stanford.edu/copyrightrenewals" target="_blank" rel="noopener noreferrer" style={{ color: '#7480d4', textDecoration: 'none', fontWeight: 600 }}>Stanford Copyright Renewal Database</a>
+        {' '}(CC BY 3.0) · {' '}
+        <a href="https://cce-search.nypl.org/" target="_blank" rel="noopener noreferrer" style={{ color: '#7480d4', textDecoration: 'none', fontWeight: 600 }}>NYPL Catalog of Copyright Entries</a>
+        {' '}(CC0) · {' '}
+        <a href="https://publicrecords.copyright.gov/" target="_blank" rel="noopener noreferrer" style={{ color: '#7480d4', textDecoration: 'none', fontWeight: 600 }}>US Copyright Office CPRS</a>
+        {' '}(public domain)
+        {result.sourcesWithHits.length > 0 && (
+          <span> · <strong style={{ fontWeight: 600, color: '#1e3a5f' }}>Matched in: {result.sourcesWithHits.join(', ')}</strong></span>
+        )}
+      </div>
+
       {/* ── Disclaimer ── */}
       <div style={{
         padding: '0.875rem 1.125rem',
@@ -823,6 +849,42 @@ function RenewalRecordCard({ record }: { record: RenewalRecord }) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Citation / verify row */}
+      <div style={{
+        marginTop: '0.875rem',
+        paddingTop: '0.75rem',
+        borderTop: '1px solid #e5e7eb',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '0.5rem',
+        flexWrap: 'wrap',
+      }}>
+        <span style={{ fontSize: '0.68rem', color: '#9ba6e0', fontWeight: 300, fontFamily: 'monospace' }}>
+          {record.renewalNum || record.originalRegNum || 'no record number'}
+        </span>
+        <a
+          href={
+            record.source === 'Stanford' ? 'https://exhibits.stanford.edu/copyrightrenewals' :
+            record.source === 'NYPL'     ? `https://cce-search.nypl.org/?q=${encodeURIComponent(record.matchedTitle)}` :
+            'https://publicrecords.copyright.gov/'
+          }
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            fontSize: '0.72rem',
+            color: '#7480d4',
+            fontWeight: 600,
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.2rem',
+          }}
+        >
+          Verify at {record.source} ↗
+        </a>
       </div>
     </div>
   )
