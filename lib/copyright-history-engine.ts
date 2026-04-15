@@ -109,7 +109,16 @@ const CURRENT_YEAR = new Date().getFullYear();
 /**
  * Fetch the first publication year for a title from Open Library.
  * Returns null on timeout (4 s default), network error, or no match — never throws.
- * Priority in the pub-year chain: user hint → Open Library → high-confidence Supabase records.
+ *
+ * Priority in the pub-year chain: user hint → Open Library → null.
+ * Supabase renewal records are NEVER used to derive pub year (they are used only
+ * for renewal lookup). Using records for pub year derivation creates self-reinforcing
+ * false positives when a later edition of a work scores high title similarity.
+ *
+ * Title validation: OL's author search is fuzzy — searching "Fitzgerald" can return
+ * works like "This Side of Paradise" (1920) before "The Great Gatsby" (1925).
+ * We scan up to 5 results and return the year only from a doc whose title
+ * closely matches the search title (≥80 % of non-trivial words in common).
  */
 export async function fetchOpenLibraryYear(
   title: string,
@@ -123,7 +132,7 @@ export async function fetchOpenLibraryYear(
     const qs = new URLSearchParams({
       title,
       fields: "first_publish_year,title",
-      limit: "3",
+      limit: "5",
     });
     if (author) qs.set("author", author);
 
@@ -137,14 +146,40 @@ export async function fetchOpenLibraryYear(
 
     if (!res.ok) return null;
 
-    const json = await res.json() as { docs?: { first_publish_year?: number }[] };
+    const json = await res.json() as { docs?: { first_publish_year?: number; title?: string }[] };
     const docs = json?.docs ?? [];
     if (!docs.length) return null;
 
-    const year = docs[0]?.first_publish_year;
-    if (typeof year === "number" && year >= 1800 && year <= new Date().getFullYear()) {
-      return year;
+    // Normalize a title: lowercase, strip leading articles, strip non-alphanumeric.
+    const normalizeTitle = (t: string): string =>
+      t.toLowerCase()
+        .replace(/^(the|a|an)\s+/i, "")
+        .replace(/[^a-z0-9\s]/g, "")
+        .trim();
+
+    const searchNorm = normalizeTitle(title);
+    // Words longer than 2 characters are meaningful for matching.
+    const searchWords = searchNorm.split(/\s+/).filter((w) => w.length > 2);
+
+    const currentYearNow = new Date().getFullYear();
+
+    for (const doc of docs) {
+      const docNorm = normalizeTitle(doc.title ?? "");
+
+      // Require at least 80 % of the search's meaningful words to appear in the doc title.
+      // This prevents "Fitzgerald" searches from matching unrelated Fitzgerald titles.
+      if (searchWords.length > 0) {
+        const matchCount = searchWords.filter((w) => docNorm.includes(w)).length;
+        const matchRatio = matchCount / searchWords.length;
+        if (matchRatio < 0.8) continue;
+      }
+
+      const year = doc.first_publish_year;
+      if (typeof year === "number" && year >= 1800 && year <= currentYearNow) {
+        return year;
+      }
     }
+
     return null;
   } catch {
     // Timeout, network error, JSON parse failure — degrade gracefully.
@@ -578,63 +613,36 @@ export function assembleCopyrightHistory(params: {
   const allRecords = [...stanfordRecords, ...nyplRecords, ...uscoRecords];
 
   // ── Step 1: Publication year ─────────────────────────────────────────────
-  // Priority: user hint (always authoritative) → high-confidence Supabase
-  // renewal records → Open Library as fallback only.
+  // Priority: user hint (always authoritative) → Open Library → null.
   //
-  // Why Supabase before Open Library: renewal records are actual copyright
-  // filings and reflect the legally-significant original publication year.
-  // Open Library's first_publish_year aggregates all editions (including
-  // foreign reprints and later printings) and is unreliable without author
-  // context. OL is used as a fallback when no records are available, and
-  // as a cross-check: if it agrees with records (≤3 years) we keep the
-  // record year; if it disagrees significantly we still keep the record year
-  // and log the discrepancy.
+  // Supabase renewal records are intentionally NOT used to derive pub year.
+  // Using records for year derivation creates self-reinforcing false positives:
+  // a later collected-works edition (e.g. a 1934 omnibus of a 1925 novel) can
+  // score very high title similarity and cause the engine to lock onto the wrong
+  // year, which then filters out the original edition's renewal records entirely.
+  // Renewal records tell us about copyright filings; they do not reliably
+  // identify the legally-significant first publication year.
   //
-  // Cross-validate each record's pubYear against its renewalYear:
-  // a renewal must be filed ~28 years after publication (allow ±7 for
-  // data-quality variance). A record with pubYear=1934 and renewalYear=1953
-  // (gap=19) fails this check and is ignored for year derivation.
-  let pubYear: number | null = pubYearHint;
-
-  if (!pubYear) {
-    // Derive from high-confidence Supabase records (≥0.75 similarity).
-    const highConfidenceRecords = allRecords.filter(
-      (r) => r.similarity >= 0.75
-    );
-    const recordPubYears: number[] = [];
-    highConfidenceRecords.forEach((r) => {
-      if (!r.pubYear || r.pubYear < 1800 || r.pubYear > CURRENT_YEAR) return;
-      if (r.renewalYear) {
-        const gap = r.renewalYear - r.pubYear;
-        if (gap >= 21 && gap <= 35) recordPubYears.push(r.pubYear);
-      } else {
-        recordPubYears.push(r.pubYear);
-      }
-    });
-    const supabaseYear = recordPubYears.length > 0 ? Math.min(...recordPubYears) : null;
-
-    if (supabaseYear !== null) {
-      pubYear = supabaseYear;
-      // Cross-check: log if OL disagrees significantly (useful for debugging
-      // OL data quality issues — the record year still wins either way).
-      if (openLibraryYear !== null && Math.abs(openLibraryYear - supabaseYear) > 3) {
-        console.warn(
-          `[History] Pub year discrepancy: records=${supabaseYear}, OL=${openLibraryYear} — keeping records year`
-        );
-      }
-    } else {
-      // No high-confidence records — fall back to Open Library.
-      pubYear = openLibraryYear;
-    }
-  }
+  // Open Library's first_publish_year is fetched with title validation (see
+  // fetchOpenLibraryYear) to ensure we get the year for the correct work, not
+  // for a different work by the same author.
+  //
+  // If neither hint nor OL year is available, pubYear remains null and the
+  // engine returns Undetermined — prompting the user to provide a year.
+  const pubYear: number | null = pubYearHint ?? openLibraryYear ?? null;
 
   // ── Step 2: Filter to records consistent with the pub year ───────────────
-  // Only records whose pubYear is within ±2 years of the known pub year,
+  // Only records whose pubYear is within ±5 years of the known pub year,
   // or whose renewalYear falls in the expected window (pubYear+21 to
   // pubYear+35), are used for renewal determination.
+  //
+  // ±5 (not ±2) is intentional: Open Library and Supabase data can differ by
+  // a few years due to edition variation, and the tighter filter was causing
+  // valid records to be excluded. A 10-year window is still narrow enough to
+  // prevent cross-contamination between unrelated works.
   const renewalEligibleRecords = pubYear
     ? allRecords.filter((r) => {
-        if (r.pubYear) return Math.abs(r.pubYear - pubYear!) <= 2;
+        if (r.pubYear) return Math.abs(r.pubYear - pubYear!) <= 5;
         if (r.renewalYear)
           return r.renewalYear >= pubYear! + 21 && r.renewalYear <= pubYear! + 35;
         return false;

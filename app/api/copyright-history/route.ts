@@ -197,9 +197,9 @@ export async function POST(req: NextRequest) {
   // ── Log assembled result ─────────────────────────────────────────────────────
   const pubYearSource =
     pubYear                                         ? "user-provided hint"
-    : openLibraryYear && history.pubYear === openLibraryYear ? "Open Library"
-    : history.pubYear                               ? "Supabase records (high-confidence)"
-    :                                                 "unknown — could not determine";
+    : openLibraryYear && history.pubYear === openLibraryYear ? "Open Library (title-validated)"
+    : history.pubYear                               ? "Open Library (fallback)"
+    :                                                 "unknown — no hint, OL returned null or no title match";
 
   console.log(`[History] Pub year: ${history.pubYear ?? "null"} (source: ${pubYearSource})`);
   console.log(`[History] Period:   ${history.periodLabel}`);
