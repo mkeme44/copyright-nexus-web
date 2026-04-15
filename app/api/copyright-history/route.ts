@@ -178,7 +178,9 @@ export async function POST(req: NextRequest) {
   if (!pubYear) {
     console.log(
       `[History] Open Library: ${
-        openLibraryYear !== null ? `returned ${openLibraryYear}` : "no result (timeout, 404, or no match)"
+        openLibraryYear !== null
+          ? `year=${openLibraryYear} (accepted after title validation)`
+          : "null — timeout, no match, or all results rejected by title validation"
       }`
     );
   }

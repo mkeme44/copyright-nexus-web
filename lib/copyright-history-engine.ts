@@ -115,10 +115,16 @@ const CURRENT_YEAR = new Date().getFullYear();
  * for renewal lookup). Using records for pub year derivation creates self-reinforcing
  * false positives when a later edition of a work scores high title similarity.
  *
- * Title validation: OL's author search is fuzzy — searching "Fitzgerald" can return
- * works like "This Side of Paradise" (1920) before "The Great Gatsby" (1925).
- * We scan up to 5 results and return the year only from a doc whose title
- * closely matches the search title (≥80 % of non-trivial words in common).
+ * Title validation: OL's author search is fuzzy and can return:
+ *   (a) unrelated works by the same author ("This Side of Paradise" instead of
+ *       "The Great Gatsby"), and
+ *   (b) compilations/anthologies that contain the work ("This Side of Paradise /
+ *       The Great Gatsby and Other Stories") which carry an earlier date.
+ *
+ * We compute a combined match score: (fraction of search words in doc) ×
+ * (length-similarity ratio). The length-similarity penalty rejects docs whose
+ * title is much longer than the search title — a clear signal of an anthology.
+ * Only docs scoring ≥ 0.65 are accepted; we return the best-scoring doc's year.
  */
 export async function fetchOpenLibraryYear(
   title: string,
@@ -132,7 +138,7 @@ export async function fetchOpenLibraryYear(
     const qs = new URLSearchParams({
       title,
       fields: "first_publish_year,title",
-      limit: "5",
+      limit: "10",
     });
     if (author) qs.set("author", author);
 
@@ -150,10 +156,12 @@ export async function fetchOpenLibraryYear(
     const docs = json?.docs ?? [];
     if (!docs.length) return null;
 
-    // Normalize a title: lowercase, strip leading articles, strip non-alphanumeric.
+    // Normalize a title: lowercase, strip leading articles and subtitles after
+    // common separators, then strip non-alphanumeric.
     const normalizeTitle = (t: string): string =>
       t.toLowerCase()
         .replace(/^(the|a|an)\s+/i, "")
+        .replace(/\s*[:;\/]\s*.+$/, "")   // strip subtitles: "Gatsby: A Novel" → "Gatsby"
         .replace(/[^a-z0-9\s]/g, "")
         .trim();
 
@@ -163,24 +171,53 @@ export async function fetchOpenLibraryYear(
 
     const currentYearNow = new Date().getFullYear();
 
+    // Score each doc and pick the best match above threshold.
+    let bestYear: number | null = null;
+    let bestScore = 0;
+
     for (const doc of docs) {
       const docNorm = normalizeTitle(doc.title ?? "");
+      const docWords = docNorm.split(/\s+/).filter((w) => w.length > 2);
 
-      // Require at least 80 % of the search's meaningful words to appear in the doc title.
-      // This prevents "Fitzgerald" searches from matching unrelated Fitzgerald titles.
-      if (searchWords.length > 0) {
-        const matchCount = searchWords.filter((w) => docNorm.includes(w)).length;
-        const matchRatio = matchCount / searchWords.length;
-        if (matchRatio < 0.8) continue;
-      }
+      // Fraction of search words that appear in the doc title.
+      const wordCoverage =
+        searchWords.length > 0
+          ? searchWords.filter((w) => docWords.includes(w)).length / searchWords.length
+          : 0;
+
+      // Length-similarity ratio: penalise docs much longer than the search title.
+      // "great gatsby" (2 words) vs "great gatsby other stories" (4 words) → 2/4 = 0.5
+      // "great gatsby" (2 words) vs "great gatsby"               (2 words) → 1.0
+      const lengthRatio =
+        docWords.length > 0
+          ? Math.min(searchWords.length, docWords.length) /
+            Math.max(searchWords.length, docWords.length)
+          : 0;
+
+      const score = wordCoverage * lengthRatio;
+
+      console.log(
+        `[OL] candidate: "${doc.title ?? "?"}" → score=${score.toFixed(2)} ` +
+        `(coverage=${wordCoverage.toFixed(2)}, lengthRatio=${lengthRatio.toFixed(2)}) ` +
+        `year=${doc.first_publish_year ?? "?"}`
+      );
 
       const year = doc.first_publish_year;
-      if (typeof year === "number" && year >= 1800 && year <= currentYearNow) {
-        return year;
+      if (
+        score > bestScore &&
+        score >= 0.65 &&
+        typeof year === "number" &&
+        year >= 1800 &&
+        year <= currentYearNow
+      ) {
+        bestScore = score;
+        bestYear = year;
+        console.log(`[OL] → accepted (new best, score=${score.toFixed(2)})`);
       }
     }
 
-    return null;
+    console.log(`[OL] final year: ${bestYear ?? "null"} (best score=${bestScore.toFixed(2)})`);
+    return bestYear;
   } catch {
     // Timeout, network error, JSON parse failure — degrade gracefully.
     return null;
