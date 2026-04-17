@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { assembleCopyrightHistory, fetchOpenLibraryYear } from "@/lib/copyright-history-engine";
+import { assembleCopyrightHistory, extractPublicationYearGPT } from "@/lib/copyright-history-engine";
 
 // ── Supabase client ──────────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
     }`
   );
   if (!pubYear) {
-    console.log(`[History] Open Library: fetching pub year for "${title}"${author ? ` by "${author}"` : ""} (4 s timeout)`);
+    console.log(`[History] GPT: inferring pub year for "${title}"${author ? ` by "${author}"` : ""}`);
   }
 
   const baseParams = {
@@ -141,13 +141,14 @@ export async function POST(req: NextRequest) {
     result_limit: 5,
   };
 
-  // All four fetches fire in parallel. Open Library is only called when the user
-  // didn't supply a year (user hint always wins; no need to burn the OL request).
-  const [stanfordRows, nyplRows, uscoRows, openLibraryYear] = await Promise.all([
+  // All four fetches fire in parallel. GPT year inference is only called when the
+  // user didn't supply a year (user hint always wins).
+  const openaiKey = process.env.OPENAI_API_KEY ?? "";
+  const [stanfordRows, nyplRows, uscoRows, gptYear] = await Promise.all([
     needsRenewalLookup ? rpcWithRetry(supabase, "search_renewals", baseParams)       : Promise.resolve([]),
     needsRenewalLookup ? rpcWithRetry(supabase, "search_nypl_renewals", baseParams)  : Promise.resolve([]),
     needsRenewalLookup ? rpcWithRetry(supabase, "search_usco_renewals", baseParams)  : Promise.resolve([]),
-    !pubYear           ? fetchOpenLibraryYear(title, author)                         : Promise.resolve(null),
+    !pubYear           ? extractPublicationYearGPT(title, author, openaiKey)         : Promise.resolve(null),
   ]);
 
   // ── Log database results ─────────────────────────────────────────────────────
@@ -177,10 +178,10 @@ export async function POST(req: NextRequest) {
 
   if (!pubYear) {
     console.log(
-      `[History] Open Library: ${
-        openLibraryYear !== null
-          ? `year=${openLibraryYear} (accepted after title validation)`
-          : "null — timeout, no match, or all results rejected by title validation"
+      `[History] GPT year: ${
+        gptYear !== null
+          ? `${gptYear} (inferred from training knowledge)`
+          : "unknown — GPT not confident or call failed"
       }`
     );
   }
@@ -190,7 +191,7 @@ export async function POST(req: NextRequest) {
     title,
     author,
     pubYearHint: pubYear,
-    openLibraryYear: openLibraryYear as number | null,
+    openLibraryYear: gptYear as number | null,   // reuses the openLibraryYear slot; engine applies same priority chain
     stanfordRows: stanfordRows as Record<string, unknown>[],
     nyplRows: nyplRows as Record<string, unknown>[],
     uscoRows: uscoRows as Record<string, unknown>[],
@@ -198,10 +199,10 @@ export async function POST(req: NextRequest) {
 
   // ── Log assembled result ─────────────────────────────────────────────────────
   const pubYearSource =
-    pubYear                                         ? "user-provided hint"
-    : openLibraryYear && history.pubYear === openLibraryYear ? "Open Library (title-validated)"
-    : history.pubYear                               ? "Open Library (fallback)"
-    :                                                 "unknown — no hint, OL returned null or no title match";
+    pubYear              ? "user-provided hint"
+    : gptYear !== null   ? "GPT-4o (training knowledge)"
+    : history.pubYear    ? "GPT-4o (fallback)"
+    :                      "unknown — no hint and GPT returned 'unknown'";
 
   console.log(`[History] Pub year: ${history.pubYear ?? "null"} (source: ${pubYearSource})`);
   console.log(`[History] Period:   ${history.periodLabel}`);

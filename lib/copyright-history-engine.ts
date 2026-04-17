@@ -106,123 +106,53 @@ export interface CopyrightHistory {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  GPT publication-year extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Fetch the first publication year for a title from Open Library.
- * Returns null on timeout (4 s default), network error, or no match — never throws.
+ * Use GPT-4o to infer the first publication year of a work from its training
+ * knowledge. This is more reliable than Open Library's first_publish_year field,
+ * which can reflect pre-publication manuscripts, advance copies, or data errors.
  *
- * Priority in the pub-year chain: user hint → Open Library → null.
- * Supabase renewal records are NEVER used to derive pub year (they are used only
- * for renewal lookup). Using records for pub year derivation creates self-reinforcing
- * false positives when a later edition of a work scores high title similarity.
- *
- * Title validation: OL's author search is fuzzy and can return:
- *   (a) unrelated works by the same author ("This Side of Paradise" instead of
- *       "The Great Gatsby"), and
- *   (b) compilations/anthologies that contain the work ("This Side of Paradise /
- *       The Great Gatsby and Other Stories") which carry an earlier date.
- *
- * We compute a combined match score: (fraction of search words in doc) ×
- * (length-similarity ratio). The length-similarity penalty rejects docs whose
- * title is much longer than the search title — a clear signal of an anthology.
- * Only docs scoring ≥ 0.65 are accepted; we return the best-scoring doc's year.
+ * Returns a number if GPT is confident, null otherwise. Never throws.
+ * Keeps the call cheap: temperature 0, max_tokens 10, just a year digit.
  */
-export async function fetchOpenLibraryYear(
+export async function extractPublicationYearGPT(
   title: string,
   author: string | null,
-  timeoutMs = 4000
+  openaiApiKey: string
 ): Promise<number | null> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const OpenAI = (await import("openai")).default;
+    const client = new OpenAI({ apiKey: openaiApiKey });
 
-    const qs = new URLSearchParams({
-      title,
-      fields: "first_publish_year,title",
-      limit: "10",
+    const authorClause = author ? ` by ${author}` : "";
+    const prompt =
+      `What year was "${title}"${authorClause} first published in the United States? ` +
+      `Reply with ONLY the 4-digit year (e.g. 1925). ` +
+      `If you are not confident or the work is not well-known enough for you to know with certainty, reply with exactly: unknown`;
+
+    const response = await client.chat.completions.create({
+      model: "gpt-4o",
+      temperature: 0,
+      max_tokens: 10,
+      messages: [{ role: "user", content: prompt }],
     });
-    if (author) qs.set("author", author);
 
-    const res = await fetch(`https://openlibrary.org/search.json?${qs.toString()}`, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "CopyrightNexus/1.0 (crnexus.org; copyright research tool)",
-      },
-    });
-    clearTimeout(timer);
-
-    if (!res.ok) return null;
-
-    const json = await res.json() as { docs?: { first_publish_year?: number; title?: string }[] };
-    const docs = json?.docs ?? [];
-    if (!docs.length) return null;
-
-    // Normalize a title: lowercase, strip leading articles and subtitles after
-    // common separators, then strip non-alphanumeric.
-    const normalizeTitle = (t: string): string =>
-      t.toLowerCase()
-        .replace(/^(the|a|an)\s+/i, "")
-        .replace(/\s*[:;\/]\s*.+$/, "")   // strip subtitles: "Gatsby: A Novel" → "Gatsby"
-        .replace(/[^a-z0-9\s]/g, "")
-        .trim();
-
-    const searchNorm = normalizeTitle(title);
-    // Words longer than 2 characters are meaningful for matching.
-    const searchWords = searchNorm.split(/\s+/).filter((w) => w.length > 2);
-
-    const currentYearNow = new Date().getFullYear();
-
-    // Score each doc and pick the best match above threshold.
-    let bestYear: number | null = null;
-    let bestScore = 0;
-
-    for (const doc of docs) {
-      const docNorm = normalizeTitle(doc.title ?? "");
-      const docWords = docNorm.split(/\s+/).filter((w) => w.length > 2);
-
-      // Fraction of search words that appear in the doc title.
-      const wordCoverage =
-        searchWords.length > 0
-          ? searchWords.filter((w) => docWords.includes(w)).length / searchWords.length
-          : 0;
-
-      // Length-similarity ratio: penalise docs much longer than the search title.
-      // "great gatsby" (2 words) vs "great gatsby other stories" (4 words) → 2/4 = 0.5
-      // "great gatsby" (2 words) vs "great gatsby"               (2 words) → 1.0
-      const lengthRatio =
-        docWords.length > 0
-          ? Math.min(searchWords.length, docWords.length) /
-            Math.max(searchWords.length, docWords.length)
-          : 0;
-
-      const score = wordCoverage * lengthRatio;
-
-      console.log(
-        `[OL] candidate: "${doc.title ?? "?"}" → score=${score.toFixed(2)} ` +
-        `(coverage=${wordCoverage.toFixed(2)}, lengthRatio=${lengthRatio.toFixed(2)}) ` +
-        `year=${doc.first_publish_year ?? "?"}`
-      );
-
-      const year = doc.first_publish_year;
-      if (
-        score > bestScore &&
-        score >= 0.65 &&
-        typeof year === "number" &&
-        year >= 1800 &&
-        year <= currentYearNow
-      ) {
-        bestScore = score;
-        bestYear = year;
-        console.log(`[OL] → accepted (new best, score=${score.toFixed(2)})`);
-      }
+    const text = (response.choices[0]?.message?.content ?? "").trim();
+    if (/^\d{4}$/.test(text)) {
+      const year = parseInt(text, 10);
+      const now = new Date().getFullYear();
+      if (year >= 1600 && year <= now) return year;
     }
-
-    console.log(`[OL] final year: ${bestYear ?? "null"} (best score=${bestScore.toFixed(2)})`);
-    return bestYear;
+    return null;
   } catch {
-    // Timeout, network error, JSON parse failure — degrade gracefully.
+    // Any failure (network, quota, parse) → degrade gracefully.
     return null;
   }
 }
+
 
 function buildResearchLinks(
   title: string,
@@ -650,22 +580,25 @@ export function assembleCopyrightHistory(params: {
   const allRecords = [...stanfordRecords, ...nyplRecords, ...uscoRecords];
 
   // ── Step 1: Publication year ─────────────────────────────────────────────
-  // Priority: user hint (always authoritative) → Open Library → null.
+  // Priority: user hint (always authoritative) → GPT-4o extraction → null.
   //
   // Supabase renewal records are intentionally NOT used to derive pub year.
   // Using records for year derivation creates self-reinforcing false positives:
   // a later collected-works edition (e.g. a 1934 omnibus of a 1925 novel) can
   // score very high title similarity and cause the engine to lock onto the wrong
   // year, which then filters out the original edition's renewal records entirely.
-  // Renewal records tell us about copyright filings; they do not reliably
-  // identify the legally-significant first publication year.
   //
-  // Open Library's first_publish_year is fetched with title validation (see
-  // fetchOpenLibraryYear) to ensure we get the year for the correct work, not
-  // for a different work by the same author.
+  // Open Library's first_publish_year is NOT used for pub year derivation.
+  // OL's field reflects the earliest edition in its crowdsourced database —
+  // which can be a pre-publication manuscript or data entry error. For Gatsby,
+  // OL returns 1920 (not 1925) even with correct title matching.
   //
-  // If neither hint nor OL year is available, pubYear remains null and the
-  // engine returns Undetermined — prompting the user to provide a year.
+  // GPT-4o uses training knowledge to reliably identify first publication years
+  // for well-known works. For unknown works it returns null, and the engine
+  // surfaces Undetermined — prompting the user to provide a year.
+  //
+  // `openLibraryYear` parameter is retained in the signature for future use but
+  // is not currently consulted. The route no longer fetches OL.
   const pubYear: number | null = pubYearHint ?? openLibraryYear ?? null;
 
   // ── Step 2: Filter to records consistent with the pub year ───────────────
