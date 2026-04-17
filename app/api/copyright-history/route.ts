@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
   console.log(`[History] Period:   ${history.periodLabel}`);
 
   if (history.renewed === null) {
-    console.log(`[History] Renewal:  N/A (not in 1923–1963 window)`);
+    console.log(`[History] Renewal:  N/A (pub year outside ${renewalWindowStart}–1963 window)`);
   } else if (history.renewed === true) {
     console.log(`[History] Renewal:  FOUND — year ${history.renewalYear ?? "unknown"} | sources: ${history.sourcesWithHits.join(", ")}`);
   } else {
